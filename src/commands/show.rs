@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::storage::Storage;
 use anyhow::Result;
 
-use crate::utils::format_datetime;
+use crate::utils::{format_datetime, OutputStyle};
 
 pub fn handle_show_command(
     config: Config,
@@ -20,27 +20,27 @@ pub fn handle_show_command(
 }
 
 fn show_prompt_details(prompt: &crate::prompt::Prompt) {
-    println!("\n📝 Prompt Details");
-    println!("=================");
-    println!("Title: {}", prompt.description);
+    OutputStyle::print_header("📝 Prompt Details");
+
+    OutputStyle::print_field_colored("Title", &prompt.description, OutputStyle::description);
     if let Some(id) = &prompt.id {
-        println!("ID: {}", id);
+        OutputStyle::print_field_colored("ID", id, OutputStyle::muted);
     }
 
     if let Some(category) = &prompt.category {
-        println!("Category: {}", category);
+        OutputStyle::print_field_colored("Category", category, OutputStyle::tag);
     }
 
     if let Some(ref tags) = prompt.tag
         && !tags.is_empty() {
-            println!("Tags: {}", tags.join(", "));
+            OutputStyle::print_field_colored("Tags", &tags.join(", "), OutputStyle::tags);
         }
 
-    println!("Created: {}", format_datetime(&prompt.created_at));
-    println!("Updated: {}", format_datetime(&prompt.updated_at));
+    OutputStyle::print_field_colored("Created", &format_datetime(&prompt.created_at), OutputStyle::muted);
+    OutputStyle::print_field_colored("Updated", &format_datetime(&prompt.updated_at), OutputStyle::muted);
 
-    println!("\n📄 Content:");
-    println!("{}", "-".repeat(50));
-    println!("{}", prompt.content);
-    println!("{}", "-".repeat(50));
+    println!("\n{}:", OutputStyle::header("📄 Content"));
+    println!("{}", OutputStyle::separator());
+    println!("{}", OutputStyle::content(&prompt.content));
+    println!("{}", OutputStyle::separator());
 }

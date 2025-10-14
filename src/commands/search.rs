@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::storage::Storage;
 use crate::utils;
 use anyhow::Result;
-use crate::utils::format_datetime;
+use crate::utils::{format_datetime, OutputStyle, print_no_prompts_found};
 
 pub fn handle_search_command(
     config: Config,
@@ -14,7 +14,7 @@ pub fn handle_search_command(
     let prompts = storage.search_prompts(args.query.as_deref(), args.tag.as_deref())?;
 
     if prompts.is_empty() {
-        println!("No prompts found matching your criteria.");
+        print_no_prompts_found();
         return Ok(());
     }
 
@@ -28,7 +28,7 @@ pub fn handle_search_command(
     };
 
     if filtered_prompts.is_empty() {
-        println!("No prompts found matching the criteria.");
+        print_no_prompts_found();
         return Ok(());
     }
 
@@ -124,35 +124,35 @@ pub fn handle_search_command(
 }
 
 fn show_prompt_details(prompt: &crate::prompt::Prompt) {
-    println!("\n📝 Prompt Details");
-    println!("=================");
-    println!("Description: {}", prompt.description);
+    OutputStyle::print_header("📝 Prompt Details");
+
+    OutputStyle::print_field_colored("Description", &prompt.description, OutputStyle::description);
     if let Some(id) = &prompt.id {
-        println!("ID: {}", id);
+        OutputStyle::print_field_colored("ID", id, OutputStyle::muted);
     }
 
     // Display Tag field (first tag only, or empty line if no tags)
     if let Some(ref tags) = prompt.tag && !tags.is_empty() {
-        println!("Tag: {}", tags[0]);
+        OutputStyle::print_field_colored("Tag", &tags[0], OutputStyle::tag);
     } else {
-        println!("Tag:");
+        OutputStyle::print_field("Tag", "");
     }
 
     if let Some(category) = &prompt.category {
-        println!("Category: {}", category);
+        OutputStyle::print_field_colored("Category", category, OutputStyle::tag);
     }
 
     if let Some(ref tags) = prompt.tag
         && !tags.is_empty() {
-            println!("Tags: {}", tags.join(", "));
+            OutputStyle::print_field_colored("Tags", &tags.join(", "), OutputStyle::tags);
         }
 
-    println!("Created: {}", format_datetime(&prompt.created_at));
+    OutputStyle::print_field_colored("Created", &format_datetime(&prompt.created_at), OutputStyle::muted);
 
-    println!("\n📄 Content:");
-    println!("{}", "-".repeat(50));
-    println!("{}", prompt.content);
-    println!("{}", "-".repeat(50));
+    println!("\n{}:", OutputStyle::header("📄 Content"));
+    println!("{}", OutputStyle::separator());
+    println!("{}", OutputStyle::content(&prompt.content));
+    println!("{}", OutputStyle::separator());
 }
 
 fn handle_prompt_execution(prompt: &crate::prompt::Prompt, copy_to_clipboard: bool) -> Result<()> {
@@ -164,12 +164,12 @@ fn handle_prompt_execution(prompt: &crate::prompt::Prompt, copy_to_clipboard: bo
         prompt.content.clone()
     } else {
         // Prompt user for variable values
-        println!("\n🔧 This prompt contains variables:");
+        println!("\n🔧 {}:", OutputStyle::header("This prompt contains variables"));
         for (name, default) in &variables {
             if let Some(default_val) = default {
-                println!("  <{}={}>", name, default_val);
+                println!("  <{}={}>", OutputStyle::command(&format!("<{}>", name)), OutputStyle::muted(default_val));
             } else {
-                println!("  <{}>", name);
+                println!("  {}", OutputStyle::command(&format!("<{}>", name)));
             }
         }
 
@@ -179,12 +179,12 @@ fn handle_prompt_execution(prompt: &crate::prompt::Prompt, copy_to_clipboard: bo
 
     if copy_to_clipboard {
         utils::copy_to_clipboard(&rendered_content)?;
-        println!("✓ Prompt copied to clipboard!");
+        println!("✓ {}", OutputStyle::success("Prompt copied to clipboard!"));
     } else {
-        println!("\n📤 Rendered Prompt:");
-        println!("{}", "=".repeat(50));
-        println!("{}", rendered_content);
-        println!("{}", "=".repeat(50));
+        println!("\n{}:", OutputStyle::header("📤 Rendered Prompt"));
+        println!("{}", OutputStyle::header_separator());
+        println!("{}", OutputStyle::content(&rendered_content));
+        println!("{}", OutputStyle::header_separator());
     }
 
     Ok(())

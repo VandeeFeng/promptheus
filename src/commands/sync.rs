@@ -2,6 +2,7 @@ use crate::cli::SyncArgs;
 use crate::config::Config;
 use crate::storage::Storage;
 use crate::sync::{gist::GistClient, SyncClient, should_sync, SyncDirection};
+use crate::utils::print_warning;
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
 use std::io::{self, Write};
@@ -47,7 +48,7 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> 
             if !args.download {
                 upload_to_remote(&storage, &*sync_client, &local_prompts).await?;
             } else {
-                println!("⚠️  Both upload and download specified. Downloading takes precedence.");
+                print_warning("Both upload and download specified. Downloading takes precedence.");
                 download_from_remote(&storage, &remote_snippet).await?;
             }
         }
@@ -55,7 +56,7 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> 
             if !args.upload {
                 download_from_remote(&storage, &remote_snippet).await?;
             } else {
-                println!("⚠️  Both upload and download specified. Uploading takes precedence.");
+                print_warning("Both upload and download specified. Uploading takes precedence.");
                 upload_to_remote(&storage, &*sync_client, &local_prompts).await?;
             }
         }

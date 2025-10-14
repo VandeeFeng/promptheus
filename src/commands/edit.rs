@@ -4,7 +4,7 @@ use std::fs;
 use crate::cli::EditArgs;
 use crate::config::Config;
 use crate::storage::Storage;
-use crate::utils;
+use crate::utils::{self, print_error};
 
 pub async fn handle_edit_command(
     config: Config,
@@ -46,7 +46,7 @@ pub async fn handle_edit_command(
 
     // Auto-sync if enabled
     if let Err(e) = crate::commands::sync::auto_sync_if_enabled(&config).await {
-        eprintln!("⚠️  Auto-sync failed: {}", e);
+        print_error(&format!("Auto-sync failed: {}", e));
     }
 
     Ok(())

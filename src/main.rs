@@ -12,6 +12,7 @@ use clap::Parser;
 use cli::{Cli, Commands};
 use config::Config;
 use commands::*;
+use utils::print_warning;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -67,10 +68,10 @@ async fn main() -> Result<()> {
             commands::push::handle_push_command(config).await?;
         }
         Commands::Import(_) => {
-            println!("⚠️  Import command not yet implemented");
+            print_warning("Import command not yet implemented");
         }
         Commands::Export(_) => {
-            println!("⚠️  Export command not yet implemented");
+            print_warning("Export command not yet implemented");
         }
     }
 

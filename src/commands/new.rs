@@ -2,7 +2,7 @@ use crate::cli::NewArgs;
 use crate::config::Config;
 use crate::prompt::Prompt;
 use crate::storage::Storage;
-use crate::utils;
+use crate::utils::{self, print_error};
 use anyhow::Result;
 
 pub async fn handle_new_command(
@@ -88,7 +88,7 @@ pub async fn handle_new_command(
 
     // Auto-sync if enabled
     if let Err(e) = crate::commands::sync::auto_sync_if_enabled(&config).await {
-        eprintln!("⚠️  Auto-sync failed: {}", e);
+        print_error(&format!("Auto-sync failed: {}", e));
     }
 
     Ok(())

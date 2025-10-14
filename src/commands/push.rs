@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use crate::config::Config;
 use crate::storage::Storage;
 use crate::sync::{gist::GistClient, SyncClient};
+use crate::utils::print_warning;
 
 pub async fn handle_push_command(config: Config) -> Result<()> {
     // Check if sync backend is configured
@@ -19,7 +20,7 @@ pub async fn handle_push_command(config: Config) -> Result<()> {
         .context("Failed to load local prompts")?;
 
     if local_prompts.prompts.is_empty() {
-        println!("⚠️  No prompts found locally. Nothing to push.");
+        print_warning("No prompts found locally. Nothing to push.");
         return Ok(());
     }
 

@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::storage::Storage;
 use anyhow::{Context, Result};
 
-use crate::utils::format_datetime;
+use crate::utils::{format_datetime, OutputStyle, print_prompt_count, print_no_prompts_found};
 
 pub fn handle_list_command(
     config: Config,
@@ -18,7 +18,7 @@ pub fn handle_list_command(
     let prompts = storage.search_prompts(None, args.tag.as_deref())?;
 
     if prompts.is_empty() {
-        println!("No prompts found.");
+        print_no_prompts_found();
         return Ok(());
     }
 
@@ -32,7 +32,7 @@ pub fn handle_list_command(
     };
 
     if filtered_prompts.is_empty() {
-        println!("No prompts found matching the criteria.");
+        print_no_prompts_found();
         return Ok(());
     }
 
@@ -51,29 +51,29 @@ pub fn handle_list_command(
 fn show_stats(storage: &Storage) -> Result<()> {
     let stats = storage.get_prompt_stats()?;
 
-    println!("📊 Prompt Statistics");
-    println!("==================");
-    println!("Total prompts: {}", stats.total_prompts);
-    println!("Total tags: {}", stats.total_tags);
-    println!("Categories used: {}", stats.total_categories);
+    OutputStyle::print_header("📊 Prompt Statistics");
+
+    OutputStyle::print_field_colored("Total prompts", &stats.total_prompts.to_string(), OutputStyle::info);
+    OutputStyle::print_field_colored("Total tags", &stats.total_tags.to_string(), OutputStyle::info);
+    OutputStyle::print_field_colored("Categories used", &stats.total_categories.to_string(), OutputStyle::info);
 
     if !stats.tag_counts.is_empty() {
-        println!("\n🏷️  Most used tags:");
+        println!("\n🏷️  {}:", OutputStyle::header("Most used tags"));
         let mut sorted_tags: Vec<_> = stats.tag_counts.iter().collect();
         sorted_tags.sort_by(|a, b| b.1.cmp(a.1));
 
         for (tag, count) in sorted_tags.iter().take(10) {
-            println!("  {}: {}", tag, count);
+            println!("  {}: {}", OutputStyle::tags(tag), OutputStyle::info(&count.to_string()));
         }
     }
 
     if !stats.category_counts.is_empty() {
-        println!("\n📁 Categories:");
+        println!("\n📁 {}:", OutputStyle::header("Categories"));
         let mut sorted_categories: Vec<_> = stats.category_counts.iter().collect();
         sorted_categories.sort_by(|a, b| b.1.cmp(a.1));
 
         for (category, count) in sorted_categories {
-            println!("  {}: {}", category, count);
+            println!("  {}: {}", OutputStyle::tag(category), OutputStyle::info(&count.to_string()));
         }
     }
 
@@ -81,8 +81,8 @@ fn show_stats(storage: &Storage) -> Result<()> {
 }
 
 fn print_simple_list(prompts: &[crate::prompt::Prompt], config: &Config) {
-    println!("📝 Prompts ({} found)", prompts.len());
-    println!("{}", "=".repeat(50));
+    print_prompt_count(prompts.len());
+    println!("{}", OutputStyle::separator());
 
     for prompt in prompts {
         let tags = if let Some(ref tags) = prompt.tag {
@@ -96,7 +96,7 @@ fn print_simple_list(prompts: &[crate::prompt::Prompt], config: &Config) {
         };
 
         let category = if let Some(cat) = &prompt.category {
-            format!(" [{}]", cat)
+            format!(" [{}]", OutputStyle::tag(cat))
         } else {
             String::new()
         };
@@ -112,82 +112,81 @@ fn print_simple_list(prompts: &[crate::prompt::Prompt], config: &Config) {
             prompt.content.clone()
         };
 
-        println!("{}{}{}: {}",
-            prompt.description,
+        println!("{}{}: {}{}",
+            OutputStyle::description(&prompt.description),
             category,
             tags,
-            content_display
+            OutputStyle::content(&content_display)
         );
     }
 }
 
 fn print_detailed_list(prompts: &[crate::prompt::Prompt]) {
-    println!("📝 Detailed Prompt List");
-    println!("=======================");
+    OutputStyle::print_header("📝 Detailed Prompt List");
 
     for (i, prompt) in prompts.iter().enumerate() {
-        println!("\n{}. {}", i + 1, prompt.description);
+        println!("\n{}. {}", i + 1, OutputStyle::description(&prompt.description));
         if let Some(id) = &prompt.id {
-            println!("   ID: {}", id);
+            OutputStyle::print_field_colored("ID", id, OutputStyle::muted);
         }
 
         if let Some(category) = &prompt.category {
-            println!("   Category: {}", category);
+            OutputStyle::print_field_colored("Category", category, OutputStyle::tag);
         }
 
         if let Some(ref tags) = prompt.tag
             && !tags.is_empty() {
-                println!("   Tags: {}", tags.join(", "));
+                OutputStyle::print_field_colored("Tags", &tags.join(", "), OutputStyle::tags);
             }
 
-        println!("   Created: {}", format_datetime(&prompt.created_at));
-        println!("   Updated: {}", format_datetime(&prompt.updated_at));
+        OutputStyle::print_field_colored("Created", &format_datetime(&prompt.created_at), OutputStyle::muted);
+        OutputStyle::print_field_colored("Updated", &format_datetime(&prompt.updated_at), OutputStyle::muted);
 
         // Show preview of content
         let lines: Vec<&str> = prompt.content.lines().take(3).collect();
         if !lines.is_empty() {
-            println!("   Preview:");
+            println!("   {}:", OutputStyle::label("Preview"));
             for line in lines {
-                println!("     {}", line);
+                println!("     {}", OutputStyle::content(line));
             }
             if prompt.content.lines().count() > 3 {
-                println!("     ...");
+                println!("     {}", OutputStyle::muted("..."));
             }
         }
 
         if i < prompts.len() - 1 {
-            println!("{}", "-".repeat(50));
+            println!("{}", OutputStyle::separator());
         }
     }
 }
 
 fn print_table_list(prompts: &[crate::prompt::Prompt], _config: &Config) {
-
-    println!("📝 Prompts ({} found)", prompts.len());
+    print_prompt_count(prompts.len());
 
     // Calculate column widths
-    let mut max_title_width = 10; // "Title" length
-    let mut max_tag_width = 8;     // "Tags" length
+    let mut max_title_width = 15; // Minimum width for "Description"
+    let mut max_tag_width = 10;    // Minimum width for "Tags"
 
     for prompt in prompts {
         max_title_width = max_title_width.max(prompt.description.len());
-
         let tag_str = prompt.tag.iter().flatten().cloned().collect::<Vec<_>>().join(", ");
         max_tag_width = max_tag_width.max(tag_str.len());
     }
 
-    // Limit column widths
-    max_title_width = max_title_width.min(50);
-    max_tag_width = max_tag_width.min(20);
+    // Limit column widths to reasonable size
+    max_title_width = max_title_width.min(60);
+    max_tag_width = max_tag_width.min(25);
 
-    // Print header
+    // Print header with colors
     println!("┌─{}─┬─{}─┬─{}─┐",
         "─".repeat(max_title_width),
         "─".repeat(max_tag_width),
         "─".repeat(19) // Date column
     );
     println!("│ {:<width_title$} │ {:<width_tags$} │ {:^19} │",
-        "Description", "Tags", "Updated",
+        OutputStyle::header("Description"),
+        OutputStyle::header("Tags"),
+        OutputStyle::header("Updated"),
         width_title = max_title_width,
         width_tags = max_tag_width
     );
@@ -197,10 +196,10 @@ fn print_table_list(prompts: &[crate::prompt::Prompt], _config: &Config) {
         "─".repeat(19)
     );
 
-    // Print rows
+    // Print rows with colors
     for prompt in prompts {
         let description = if prompt.description.len() > max_title_width {
-            format!("{}...", &prompt.description[..max_title_width-3])
+            format!("{}...", &prompt.description[..max_title_width.saturating_sub(3)])
         } else {
             prompt.description.clone()
         };
@@ -211,7 +210,7 @@ fn print_table_list(prompts: &[crate::prompt::Prompt], _config: &Config) {
             } else {
                 let tag_string = tags.join(", ");
                 if tag_string.len() > max_tag_width {
-                    format!("{}...", &tag_string[..max_tag_width-3])
+                    format!("{}...", &tag_string[..max_tag_width.saturating_sub(3)])
                 } else {
                     tag_string
                 }
@@ -221,9 +220,9 @@ fn print_table_list(prompts: &[crate::prompt::Prompt], _config: &Config) {
         };
 
         println!("│ {:<width_title$} │ {:<width_tags$} │ {} │",
-            description,
-            tag_str,
-            format_datetime(&prompt.updated_at),
+            OutputStyle::description(&description),
+            OutputStyle::tags(&tag_str),
+            OutputStyle::muted(&format_datetime(&prompt.updated_at)),
             width_title = max_title_width,
             width_tags = max_tag_width
         );

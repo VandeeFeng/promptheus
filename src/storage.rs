@@ -83,8 +83,7 @@ impl Storage {
                 q.to_lowercase()
             };
 
-            prompts = prompts.into_iter()
-                .filter(|p| {
+            prompts.retain(|p| {
                     let description = if self.config.general.search_case_sensitive {
                         p.description.clone()
                     } else {
@@ -109,15 +108,12 @@ impl Storage {
                     description.contains(&search_query) ||
                     content.contains(&search_query) ||
                     tags_match
-                })
-                .collect();
+                });
         }
 
         // Filter by tag
         if let Some(t) = tag {
-            prompts = prompts.into_iter()
-                .filter(|p| p.tag.iter().flatten().any(|tag| tag == &t.to_string()))
-                .collect();
+            prompts.retain(|p| p.tag.iter().flatten().any(|tag| tag == &t.to_string()));
         }
 
         // Sort prompts

@@ -31,11 +31,10 @@ fn show_prompt_details(prompt: &crate::prompt::Prompt) {
         println!("Category: {}", category);
     }
 
-    if let Some(ref tags) = prompt.tag {
-        if !tags.is_empty() {
+    if let Some(ref tags) = prompt.tag
+        && !tags.is_empty() {
             println!("Tags: {}", tags.join(", "));
         }
-    }
 
     println!("Created: {}", format_datetime(&prompt.created_at));
     println!("Updated: {}", format_datetime(&prompt.updated_at));

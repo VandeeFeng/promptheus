@@ -140,13 +140,13 @@ fn detect_best_select_command() -> String {
         // On Unix-like systems, check for available tools
         if std::path::Path::new("/usr/bin/fzf").exists() ||
            std::path::Path::new("/usr/local/bin/fzf").exists() {
-            return "fzf".to_string();
+            "fzf".to_string()
         } else if std::path::Path::new("/usr/bin/sk").exists() ||
                   std::path::Path::new("/usr/local/bin/sk").exists() {
-            return "sk".to_string();
+            "sk".to_string()
         } else if std::path::Path::new("/usr/bin/peco").exists() ||
                   std::path::Path::new("/usr/local/bin/peco").exists() {
-            return "peco".to_string();
+            "peco".to_string()
         } else {
             "fzf".to_string() // Default assumption
         }

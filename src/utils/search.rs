@@ -38,7 +38,7 @@ pub fn interactive_search_with_external_tool(
 
     // Add common fzf options for better experience
     if cmd_parts[0] == "fzf" {
-        cmd.args(&[
+        cmd.args([
             "--height=40%",
             "--layout=reverse",
             "--border",

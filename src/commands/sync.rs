@@ -45,7 +45,7 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> 
     match sync_direction {
         SyncDirection::Upload => {
             if !args.download {
-                upload_to_remote(&storage, &sync_client, &local_prompts).await?;
+                upload_to_remote(&storage, &*sync_client, &local_prompts).await?;
             } else {
                 println!("⚠️  Both upload and download specified. Downloading takes precedence.");
                 download_from_remote(&storage, &remote_snippet).await?;
@@ -56,7 +56,7 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> 
                 download_from_remote(&storage, &remote_snippet).await?;
             } else {
                 println!("⚠️  Both upload and download specified. Uploading takes precedence.");
-                upload_to_remote(&storage, &sync_client, &local_prompts).await?;
+                upload_to_remote(&storage, &*sync_client, &local_prompts).await?;
             }
         }
         SyncDirection::None => {
@@ -72,7 +72,7 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> 
 
 async fn upload_to_remote(
     _storage: &Storage,
-    sync_client: &Box<dyn SyncClient>,
+    sync_client: &dyn SyncClient,
     local_prompts: &crate::prompt::PromptCollection,
 ) -> Result<()> {
     print!("📤 Uploading local changes to remote... ");
@@ -212,7 +212,7 @@ pub async fn auto_sync_if_enabled(config: &Config) -> Result<()> {
             let local_prompts = storage.load_prompts()
                 .context("Failed to load local prompts")?;
 
-            upload_to_remote(&storage, &Box::new(sync_client), &local_prompts).await
+            upload_to_remote(&storage, &*sync_client, &local_prompts).await
                 .context("Failed to upload to remote")?;
         } else if remote_snippet.updated_at > local_modified {
             // Download remote changes

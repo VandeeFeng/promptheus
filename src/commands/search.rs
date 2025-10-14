@@ -21,7 +21,7 @@ pub fn handle_search_command(
     // Filter by category if specified
     let filtered_prompts: Vec<_> = if let Some(category) = &args.category {
         prompts.into_iter()
-            .filter(|p| p.category.as_ref().map_or(false, |c| c == category))
+            .filter(|p| p.category.as_ref() == Some(category))
             .collect()
     } else {
         prompts
@@ -34,7 +34,7 @@ pub fn handle_search_command(
 
     // Create display strings for selection - use pet-like format
     let mut display_strings = Vec::new();
-    for (_index, prompt) in filtered_prompts.iter().enumerate() {
+    for prompt in filtered_prompts.iter() {
         let tags = if let Some(ref tags) = prompt.tag {
             if tags.is_empty() {
                 String::new()
@@ -61,7 +61,7 @@ pub fn handle_search_command(
             };
             format!(": {}{}", content_preview, tags)
         } else {
-            format!("{}", tags)
+            tags.to_string()
         };
 
         // Format: [description]: content #tag1 #tag2 [category] (if preview enabled)
@@ -131,15 +131,21 @@ fn show_prompt_details(prompt: &crate::prompt::Prompt) {
         println!("ID: {}", id);
     }
 
+    // Display Tag field (first tag only, or empty line if no tags)
+    if let Some(ref tags) = prompt.tag && !tags.is_empty() {
+        println!("Tag: {}", tags[0]);
+    } else {
+        println!("Tag:");
+    }
+
     if let Some(category) = &prompt.category {
         println!("Category: {}", category);
     }
 
-    if let Some(ref tags) = prompt.tag {
-        if !tags.is_empty() {
+    if let Some(ref tags) = prompt.tag
+        && !tags.is_empty() {
             println!("Tags: {}", tags.join(", "));
         }
-    }
 
     println!("Created: {}", format_datetime(&prompt.created_at));
 

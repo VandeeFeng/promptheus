@@ -25,7 +25,7 @@ pub fn handle_list_command(
     // Filter by category if specified
     let filtered_prompts: Vec<_> = if let Some(category) = &args.category {
         prompts.into_iter()
-            .filter(|p| p.category.as_ref().map_or(false, |c| c == category))
+            .filter(|p| p.category.as_ref() == Some(category))
             .collect()
     } else {
         prompts
@@ -135,11 +135,10 @@ fn print_detailed_list(prompts: &[crate::prompt::Prompt]) {
             println!("   Category: {}", category);
         }
 
-        if let Some(ref tags) = prompt.tag {
-            if !tags.is_empty() {
+        if let Some(ref tags) = prompt.tag
+            && !tags.is_empty() {
                 println!("   Tags: {}", tags.join(", "));
             }
-        }
 
         println!("   Created: {}", format_datetime(&prompt.created_at));
         println!("   Updated: {}", format_datetime(&prompt.updated_at));

@@ -64,11 +64,10 @@ fn find_line_number_of_prompt(file_path: &std::path::Path, prompt_description: &
             last_header_line = Some(line_num);
         }
         // Check if the trimmed line is the exact description line we're looking for.
-        if line.trim() == search_str {
-            if let Some(header_line) = last_header_line {
+        if line.trim() == search_str
+            && let Some(header_line) = last_header_line {
                 return Ok(header_line);
             }
-        }
     }
 
     Err(anyhow::anyhow!("Prompt not found in TOML"))

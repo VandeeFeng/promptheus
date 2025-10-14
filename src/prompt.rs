@@ -26,7 +26,7 @@ pub struct Prompt {
 }
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PromptCollection {
     pub prompts: Vec<Prompt>,
 }
@@ -49,23 +49,15 @@ impl Prompt {
     pub fn add_tag(&mut self, tag: String) {
         if self.tag.is_none() {
             self.tag = Some(vec![tag]);
-        } else if let Some(ref mut tags) = self.tag {
-            if !tags.contains(&tag) {
+        } else if let Some(ref mut tags) = self.tag
+            && !tags.contains(&tag) {
                 tags.push(tag);
                 self.updated_at = Utc::now();
             }
-        }
     }
 
 }
 
-impl Default for PromptCollection {
-    fn default() -> Self {
-        Self {
-            prompts: Vec::new(),
-        }
-    }
-}
 
 // Custom serialization functions to always include tag and category fields
 fn serialize_tag<S>(tag: &Option<Vec<String>>, serializer: S) -> Result<S::Ok, S::Error>

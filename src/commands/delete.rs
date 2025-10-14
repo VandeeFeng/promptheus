@@ -71,12 +71,11 @@ pub fn handle_delete_command(
     println!("  Description: {}", prompt.description);
     println!("  Created: {}", format_datetime(&prompt.created_at));
 
-    if !args.force {
-        if !utils::prompt_yes_no("\nAre you sure you want to delete this prompt?")? {
+    if !args.force
+        && !utils::prompt_yes_no("\nAre you sure you want to delete this prompt?")? {
             println!("Prompt not deleted.");
             return Ok(());
         }
-    }
 
     if let Some(id) = &prompt.id {
         storage.delete_prompt(id)?;

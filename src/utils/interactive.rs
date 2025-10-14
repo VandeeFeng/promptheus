@@ -146,9 +146,7 @@ pub fn select_from_list(items: &[String]) -> Result<Option<usize>> {
 
         match event::read()? {
             Event::Key(KeyEvent { code: KeyCode::Up, .. }) => {
-                if selected > 0 {
-                    selected -= 1;
-                }
+                selected = selected.saturating_sub(1);
             }
             Event::Key(KeyEvent { code: KeyCode::Down, .. }) => {
                 if selected < items.len() - 1 {
@@ -451,7 +449,7 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
     {
         // Try xclip first, then xsel
         if let Ok(mut child) = Command::new("xclip")
-            .args(&["-selection", "clipboard"])
+            .args(["-selection", "clipboard"])
             .stdin(std::process::Stdio::piped())
             .spawn()
         {
@@ -469,7 +467,7 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
         }
 
         let mut child = Command::new("xsel")
-            .args(&["--clipboard", "--input"])
+            .args(["--clipboard", "--input"])
             .stdin(std::process::Stdio::piped())
             .spawn()
             .context("Failed to spawn xsel")?;

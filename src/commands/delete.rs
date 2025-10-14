@@ -1,6 +1,6 @@
 use crate::cli::DeleteArgs;
 use crate::config::Config;
-use crate::storage::Storage;
+use crate::manager::Manager;
 use crate::utils;
 use crate::utils::format_datetime;
 use anyhow::Result;
@@ -10,7 +10,7 @@ pub fn handle_delete_command(
     args: &DeleteArgs,
     _interactive: bool,
 ) -> Result<()> {
-    let storage = Storage::new(config.clone());
+    let storage = Manager::new(config.clone());
 
     // Find prompt by ID or title
     let prompt = if let Some(found) = storage.find_prompt_by_id(&args.identifier)? {

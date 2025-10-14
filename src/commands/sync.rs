@@ -1,6 +1,6 @@
 use crate::cli::SyncArgs;
 use crate::config::Config;
-use crate::storage::Storage;
+use crate::manager::Manager;
 use crate::sync::{gist::GistClient, SyncClient, should_sync, SyncDirection};
 use crate::utils::print_warning;
 use anyhow::{Context, Result, anyhow};
@@ -15,7 +15,7 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> 
     println!("🔄 Starting sync process...");
 
     // Create storage instance
-    let storage = Storage::new(config.clone());
+    let storage = Manager::new(config.clone());
 
     // Load local prompts
     let local_prompts = storage.load_prompts()
@@ -72,9 +72,9 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> 
 }
 
 async fn upload_to_remote(
-    _storage: &Storage,
+    _storage: &Manager,
     sync_client: &dyn SyncClient,
-    local_prompts: &crate::prompt::PromptCollection,
+    local_prompts: &crate::models::PromptCollection,
 ) -> Result<()> {
     print!("📤 Uploading local changes to remote... ");
     io::stdout().flush()?;
@@ -92,14 +92,14 @@ async fn upload_to_remote(
 }
 
 async fn download_from_remote(
-    storage: &Storage,
+    storage: &Manager,
     remote_snippet: &crate::sync::RemoteSnippet,
 ) -> Result<()> {
     print!("📥 Downloading remote changes... ");
     io::stdout().flush()?;
 
     // Parse remote content
-    let remote_prompts: crate::prompt::PromptCollection = toml::from_str(&remote_snippet.content)
+    let remote_prompts: crate::models::PromptCollection = toml::from_str(&remote_snippet.content)
         .context("Failed to parse remote content")?;
 
     // Save remote prompts locally
@@ -170,7 +170,7 @@ pub async fn auto_sync_if_enabled(config: &Config) -> Result<()> {
                 .context("Failed to read local file")?;
 
             // Try to parse remote content and compare
-            match toml::from_str::<crate::prompt::PromptCollection>(&remote_snippet.content) {
+            match toml::from_str::<crate::models::PromptCollection>(&remote_snippet.content) {
                 Ok(remote_prompts) => {
                     match toml::to_string_pretty(&remote_prompts) {
                         Ok(remote_formatted) => {
@@ -205,7 +205,7 @@ pub async fn auto_sync_if_enabled(config: &Config) -> Result<()> {
     if should_sync {
         // Perform sync directly without going through handle_sync_command
         // to avoid re-comparing timestamps with prompts' updated_at
-        let storage = Storage::new(config.clone());
+        let storage = Manager::new(config.clone());
 
         if local_modified > remote_snippet.updated_at {
             // Upload local changes

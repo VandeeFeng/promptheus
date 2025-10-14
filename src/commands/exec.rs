@@ -1,6 +1,6 @@
 use crate::cli::ExecArgs;
 use crate::config::Config;
-use crate::storage::Storage;
+use crate::manager::Manager;
 use crate::utils::{OutputStyle, print_success};
 use anyhow::Result;
 
@@ -8,7 +8,7 @@ pub fn handle_exec_command(
     config: Config,
     args: &ExecArgs,
 ) -> Result<()> {
-    let storage = Storage::new(config);
+    let storage = Manager::new(config);
 
     let prompt = storage.find_prompt_by_id(&args.identifier)?
             .ok_or_else(|| anyhow::anyhow!("Prompt with ID '{}' not found", args.identifier))?;

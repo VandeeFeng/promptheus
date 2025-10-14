@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use crate::config::Config;
-use crate::storage::Storage;
+use crate::manager::Manager;
 use crate::sync::{gist::GistClient, SyncClient};
 use crate::utils::print_warning;
 
@@ -13,7 +13,7 @@ pub async fn handle_push_command(config: Config) -> Result<()> {
     println!("📤 Force uploading local prompts to remote...");
 
     // Create storage instance
-    let storage = Storage::new(config.clone());
+    let storage = Manager::new(config.clone());
 
     // Load local prompts
     let local_prompts = storage.load_prompts()

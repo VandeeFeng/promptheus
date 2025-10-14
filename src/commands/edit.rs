@@ -3,7 +3,7 @@ use std::fs;
 
 use crate::cli::EditArgs;
 use crate::config::Config;
-use crate::storage::Storage;
+use crate::manager::Manager;
 use crate::utils::{self, print_error};
 
 pub async fn handle_edit_command(
@@ -11,7 +11,7 @@ pub async fn handle_edit_command(
     args: &EditArgs,
     _interactive: bool,
 ) -> Result<()> {
-    let storage = Storage::new(config.clone());
+    let storage = Manager::new(config.clone());
     let prompts = storage.search_prompts(args.tag.as_deref(), args.category.as_deref())?;
 
     let file_to_edit = config.general.prompt_file.clone();

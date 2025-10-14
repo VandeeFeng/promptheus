@@ -1,13 +1,13 @@
-use crate::prompt::{Prompt, PromptCollection};
+use crate::models::{Prompt, PromptCollection};
 use crate::config::Config;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 
-pub struct Storage {
+pub struct Manager {
     config: Config,
 }
 
-impl Storage {
+impl Manager {
     pub fn new(config: Config) -> Self {
         Self { config }
     }

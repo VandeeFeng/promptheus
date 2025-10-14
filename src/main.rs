@@ -1,7 +1,7 @@
 mod cli;
 mod config;
-mod prompt;
-mod storage;
+mod models;
+mod manager;
 mod sync;
 mod utils;
 mod commands;
@@ -79,7 +79,7 @@ async fn main() -> Result<()> {
 }
 
 fn handle_tags_command(config: Config) -> Result<()> {
-    let storage = storage::Storage::new(config);
+    let storage = manager::Manager::new(config);
     let tags = storage.get_all_tags()?;
 
     if tags.is_empty() {
@@ -97,7 +97,7 @@ fn handle_tags_command(config: Config) -> Result<()> {
 }
 
 fn handle_categories_command(config: Config) -> Result<()> {
-    let storage = storage::Storage::new(config);
+    let storage = manager::Manager::new(config);
     let categories = storage.get_categories()?;
 
     if categories.is_empty() {

@@ -262,7 +262,7 @@ impl Config {
                     .with_context(|| format!("Failed to create prompt directory: {:?}", parent))?;
             }
 
-            let default_collection = crate::prompt::PromptCollection::default();
+            let default_collection = crate::models::PromptCollection::default();
             let content = toml::to_string_pretty(&default_collection)
                 .with_context(|| "Failed to create default prompt collection")?;
 

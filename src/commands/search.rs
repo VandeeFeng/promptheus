@@ -1,6 +1,6 @@
 use crate::cli::SearchArgs;
 use crate::config::Config;
-use crate::storage::Storage;
+use crate::manager::Manager;
 use crate::utils;
 use anyhow::Result;
 use crate::utils::{format_datetime, OutputStyle, print_no_prompts_found};
@@ -9,7 +9,7 @@ pub fn handle_search_command(
     config: Config,
     args: &SearchArgs,
 ) -> Result<()> {
-    let storage = Storage::new(config.clone());
+    let storage = Manager::new(config.clone());
 
     let prompts = storage.search_prompts(args.query.as_deref(), args.tag.as_deref())?;
 
@@ -123,7 +123,7 @@ pub fn handle_search_command(
     Ok(())
 }
 
-fn show_prompt_details(prompt: &crate::prompt::Prompt) {
+fn show_prompt_details(prompt: &crate::models::Prompt) {
     OutputStyle::print_header("📝 Prompt Details");
 
     OutputStyle::print_field_colored("Description", &prompt.description, OutputStyle::description);
@@ -155,7 +155,7 @@ fn show_prompt_details(prompt: &crate::prompt::Prompt) {
     println!("{}", OutputStyle::separator());
 }
 
-fn handle_prompt_execution(prompt: &crate::prompt::Prompt, copy_to_clipboard: bool) -> Result<()> {
+fn handle_prompt_execution(prompt: &crate::models::Prompt, copy_to_clipboard: bool) -> Result<()> {
     // Parse variables in the prompt content
     let variables = utils::parse_command_variables(&prompt.content);
 
@@ -192,7 +192,7 @@ fn handle_prompt_execution(prompt: &crate::prompt::Prompt, copy_to_clipboard: bo
 
 /// Find the index of a prompt by parsing its display line
 fn find_prompt_by_display_line(
-    prompts: &[crate::prompt::Prompt],
+    prompts: &[crate::models::Prompt],
     selected_line: &str
 ) -> Result<Option<usize>> {
     // Extract description from format: [description]: content #tags [category]

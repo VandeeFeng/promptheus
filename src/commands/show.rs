@@ -1,6 +1,6 @@
 use crate::cli::ShowArgs;
 use crate::config::Config;
-use crate::storage::Storage;
+use crate::manager::Manager;
 use anyhow::Result;
 
 use crate::utils::{format_datetime, OutputStyle};
@@ -9,7 +9,7 @@ pub fn handle_show_command(
     config: Config,
     args: &ShowArgs,
 ) -> Result<()> {
-    let storage = Storage::new(config);
+    let storage = Manager::new(config);
 
     let prompt = storage.find_prompt_by_id(&args.identifier)?
             .ok_or_else(|| anyhow::anyhow!("Prompt with ID '{}' not found", args.identifier))?;
@@ -19,7 +19,7 @@ pub fn handle_show_command(
     Ok(())
 }
 
-fn show_prompt_details(prompt: &crate::prompt::Prompt) {
+fn show_prompt_details(prompt: &crate::models::Prompt) {
     OutputStyle::print_header("📝 Prompt Details");
 
     OutputStyle::print_field_colored("Title", &prompt.description, OutputStyle::description);

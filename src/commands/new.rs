@@ -1,7 +1,7 @@
 use crate::cli::NewArgs;
 use crate::config::Config;
-use crate::prompt::Prompt;
-use crate::storage::Storage;
+use crate::models::Prompt;
+use crate::manager::Manager;
 use crate::utils::{self, print_error};
 use anyhow::Result;
 
@@ -10,7 +10,7 @@ pub async fn handle_new_command(
     args: &NewArgs,
     _interactive: bool,
 ) -> Result<()> {
-    let storage = Storage::new(config.clone());
+    let storage = Manager::new(config.clone());
 
     let description = match &args.description {
         Some(d) => d.clone(),

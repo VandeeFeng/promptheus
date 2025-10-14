@@ -1,6 +1,6 @@
 use crate::cli::{ListArgs, ListFormat};
 use crate::config::Config;
-use crate::storage::Storage;
+use crate::manager::Manager;
 use anyhow::{Context, Result};
 
 use crate::utils::{format_datetime, OutputStyle, print_prompt_count, print_no_prompts_found};
@@ -9,7 +9,7 @@ pub fn handle_list_command(
     config: Config,
     args: &ListArgs,
 ) -> Result<()> {
-    let storage = Storage::new(config.clone());
+    let storage = Manager::new(config.clone());
 
     if args.stats {
         return show_stats(&storage);
@@ -48,7 +48,7 @@ pub fn handle_list_command(
     Ok(())
 }
 
-fn show_stats(storage: &Storage) -> Result<()> {
+fn show_stats(storage: &Manager) -> Result<()> {
     let stats = storage.get_prompt_stats()?;
 
     OutputStyle::print_header("📊 Prompt Statistics");
@@ -80,7 +80,7 @@ fn show_stats(storage: &Storage) -> Result<()> {
     Ok(())
 }
 
-fn print_simple_list(prompts: &[crate::prompt::Prompt], config: &Config) {
+fn print_simple_list(prompts: &[crate::models::Prompt], config: &Config) {
     print_prompt_count(prompts.len());
     println!("{}", OutputStyle::separator());
 
@@ -121,7 +121,7 @@ fn print_simple_list(prompts: &[crate::prompt::Prompt], config: &Config) {
     }
 }
 
-fn print_detailed_list(prompts: &[crate::prompt::Prompt]) {
+fn print_detailed_list(prompts: &[crate::models::Prompt]) {
     OutputStyle::print_header("📝 Detailed Prompt List");
 
     for (i, prompt) in prompts.iter().enumerate() {
@@ -160,7 +160,7 @@ fn print_detailed_list(prompts: &[crate::prompt::Prompt]) {
     }
 }
 
-fn print_table_list(prompts: &[crate::prompt::Prompt], _config: &Config) {
+fn print_table_list(prompts: &[crate::models::Prompt], _config: &Config) {
     print_prompt_count(prompts.len());
 
     // Calculate column widths
@@ -235,7 +235,7 @@ fn print_table_list(prompts: &[crate::prompt::Prompt], _config: &Config) {
     );
 }
 
-fn print_json_list(prompts: &[crate::prompt::Prompt]) -> Result<()> {
+fn print_json_list(prompts: &[crate::models::Prompt]) -> Result<()> {
     let json = serde_json::to_string_pretty(prompts)
         .context("Failed to serialize prompts to JSON")?;
     println!("{}", json);

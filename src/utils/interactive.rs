@@ -25,6 +25,26 @@ impl RawModeGuard {
         let _ = execute!(io::stdout(), EnableBracketedPaste);
         Ok(RawModeGuard { bracketed_paste: true })
     }
+
+    /// Exit raw mode and print cancellation message, returns None
+    fn cancel(self, message: &str) -> Option<String> {
+        // `self` is moved here, so Drop will be called immediately
+        drop(self);
+        println!();
+        crate::utils::error::print_cancelled(message);
+        None
+    }
+
+    /// Print newline and flush stdout, returning None on error
+    fn print_newline_and_flush(&self) -> Option<()> {
+        if execute!(io::stdout(), style::Print("\r\n")).is_err() {
+            return None;
+        }
+        if io::stdout().flush().is_err() {
+            return None;
+        }
+        Some(())
+    }
 }
 
 impl Drop for RawModeGuard {
@@ -80,6 +100,7 @@ pub fn prompt_input_with_autocomplete(prompt: &str, suggestions: &[String]) -> O
     let _guard = RawModeGuard::new().ok()?;
     let mut input = String::new();
     let mut current_suggestion = String::new();
+    let mut cancelled = false;
 
     loop {
         let event = match event::read() {
@@ -181,17 +202,18 @@ pub fn prompt_input_with_autocomplete(prompt: &str, suggestions: &[String]) -> O
                 break;
             }
             Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
-                // Exit raw mode first before printing
-                drop(_guard);
-                println!(); // Ensure we're on a new line
-                crate::utils::error::print_cancelled("Operation cancelled by user");
-                return None;
+                cancelled = true;
+                break;
             }
             _ => {}
         }
     }
 
-    Some(input.trim().to_string())
+    if cancelled {
+        _guard.cancel("Operation cancelled by user")
+    } else {
+        Some(input.trim().to_string())
+    }
 }
 
 pub fn prompt_multiline(prompt: &str) -> Option<String> {
@@ -200,6 +222,7 @@ pub fn prompt_multiline(prompt: &str) -> Option<String> {
     let _guard = RawModeGuard::with_bracketed_paste().ok()?;
     let mut lines = Vec::new();
     let mut current_line = String::new();
+    let mut cancelled = false;
 
     loop {
         let event = match event::read() {
@@ -262,13 +285,8 @@ pub fn prompt_multiline(prompt: &str) -> Option<String> {
                 }
             }
             Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
-                // Exit raw mode first before printing
-                drop(_guard);
-                if execute!(io::stdout(), style::Print("\r\n")).is_err() {
-                    return None;
-                }
-                crate::utils::error::print_cancelled("Operation cancelled by user");
-                return None;
+                cancelled = true;
+                break;
             }
             Event::Paste(pasted_text) => {
                 let mut pasted_lines = pasted_text.lines().peekable();
@@ -292,15 +310,13 @@ pub fn prompt_multiline(prompt: &str) -> Option<String> {
         }
     }
 
-    drop(_guard); // Exit raw mode before printing
-    // Ensure we're on a new line after exiting raw mode
-    if execute!(io::stdout(), style::Print("\r\n")).is_err() {
-        return None;
+    if cancelled {
+        _guard.cancel("Operation cancelled by user")
+    } else {
+        // Handle normal exit
+        _guard.print_newline_and_flush()?;
+        Some(lines.join("\n"))
     }
-    if io::stdout().flush().is_err() {
-        return None;
-    }
-    Some(lines.join("\n"))
 }
 
 pub fn prompt_yes_no(prompt: &str) -> Result<bool> {

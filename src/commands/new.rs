@@ -3,6 +3,7 @@ use crate::config::Config;
 use crate::models::Prompt;
 use crate::manager::Manager;
 use crate::utils::{self, print_error};
+use crate::utils::output::{OutputStyle, print_success};
 use anyhow::Result;
 
 pub async fn handle_new_command(
@@ -14,7 +15,7 @@ pub async fn handle_new_command(
 
     let description = match &args.description {
         Some(d) => d.clone(),
-        None => utils::prompt_input("Description: ")?,
+        None => utils::prompt_input(&format!("{}: ", OutputStyle::label("Description")))?,
     };
 
     let content = if let Some(content) = &args.content {
@@ -22,7 +23,7 @@ pub async fn handle_new_command(
     } else if args.editor {
         utils::open_editor_custom(None, None, Some(&config.general.editor))?
     } else {
-        utils::prompt_multiline("Prompt content:")?
+        utils::prompt_multiline(&format!("{}", OutputStyle::label("Prompt content:")))?
     };
 
     let mut prompt = Prompt::new(description.clone(), content);
@@ -37,13 +38,13 @@ pub async fn handle_new_command(
         // Show existing tags for reference
         let existing_tags = storage.get_all_tags()?;
         if !existing_tags.is_empty() {
-            println!("\n🏷️  Existing tags: {}", existing_tags.join(", "));
+            println!("\n🏷️  Existing tags: {}", OutputStyle::tags(&existing_tags.join(", ")));
             println!("Tip: Use --tag <tag1> <tag2> to add tags when creating prompts");
         }
 
         // Allow adding custom tags
         loop {
-            let custom_tag = utils::prompt_input("Add custom tag (leave empty to continue): ")?;
+            let custom_tag = utils::prompt_input(&format!("{} ", OutputStyle::label("Add custom tag (leave empty to continue):")))?;
             if custom_tag.is_empty() {
                 break;
             }
@@ -70,13 +71,13 @@ pub async fn handle_new_command(
                 prompt.category = Some(existing_categories[index].clone());
             } else {
                 // User selected custom input
-                let custom_category = utils::prompt_input("Enter new category name: ")?;
+                let custom_category = utils::prompt_input(&format!("{} ", OutputStyle::label("Enter new category name:")))?;
                 if !custom_category.is_empty() {
                     prompt.category = Some(custom_category);
                 }
             }
         } else {
-            let custom_category = utils::prompt_input("Enter category (leave empty for none): ")?;
+            let custom_category = utils::prompt_input(&format!("{} ", OutputStyle::label("Enter category (leave empty for none):")))?;
             if !custom_category.is_empty() {
                 prompt.category = Some(custom_category);
             }
@@ -84,7 +85,7 @@ pub async fn handle_new_command(
     }
 
     storage.add_prompt(prompt)?;
-    println!("✓ Prompt '{}' saved successfully!", description);
+    print_success(&format!("Prompt '{}' saved successfully!", description));
 
     // Auto-sync if enabled
     if let Err(e) = crate::commands::sync::auto_sync_if_enabled(&config).await {

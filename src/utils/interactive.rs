@@ -21,7 +21,6 @@ pub fn prompt_input(prompt: &str) -> Result<String> {
 
 pub fn prompt_multiline(prompt: &str) -> Result<String> {
     println!("{}", prompt);
-    println!("Enter your content (Enter to save, Shift+Enter for new line):");
 
     terminal::enable_raw_mode()?;
 
@@ -527,9 +526,9 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
                 {
                     if let Some(stdin) = child.stdin.as_mut()
                         && let Err(e) = stdin.write_all(text.as_bytes()) {
-                        last_error = Some(anyhow::anyhow!("Failed to write to {}: {}", tool, e));
-                        continue;
-                    }
+                            last_error = Some(anyhow::anyhow!("Failed to write to {}: {}", tool, e));
+                            continue;
+                        }
 
                     match child.wait() {
                         Ok(status) if status.success() => return Ok(()),

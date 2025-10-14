@@ -42,8 +42,6 @@ pub async fn handle_edit_command(
 
     utils::edit_file_direct(&file_to_edit, line_number.map(|l| l as u32), args.editor.as_deref())?;
 
-    println!("✓ Prompt file opened for editing.");
-
     // Auto-sync if enabled
     if let Err(e) = crate::commands::sync::auto_sync_if_enabled(&config).await {
         print_error(&format!("Auto-sync failed: {}", e));

@@ -33,7 +33,7 @@ impl OutputStyle {
     }
 
     pub fn label(text: &str) -> ColoredString {
-        text.bright_black()
+        text.cyan()
     }
 
     pub fn success(text: &str) -> ColoredString {

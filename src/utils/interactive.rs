@@ -10,6 +10,60 @@ use std::process::Command;
 use std::env;
 use crate::utils::output::OutputStyle;
 
+struct RawModeGuard;
+
+impl RawModeGuard {
+    fn new() -> Result<Self> {
+        terminal::enable_raw_mode()?;
+        Ok(RawModeGuard)
+    }
+}
+
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        let _ = terminal::disable_raw_mode();
+    }
+}
+
+struct InputGuard;
+
+impl InputGuard {
+    fn new() -> Result<Self> {
+        terminal::enable_raw_mode()?;
+        let _ = execute!(io::stdout(), EnableBracketedPaste);
+        Ok(InputGuard)
+    }
+}
+
+impl Drop for InputGuard {
+    fn drop(&mut self) {
+        let _ = execute!(io::stdout(), DisableBracketedPaste);
+        let _ = terminal::disable_raw_mode();
+    }
+}
+
+fn detect_editor(editor_cmd: Option<&str>) -> String {
+    editor_cmd
+        .map(|s| s.to_string())
+        .or_else(|| std::env::var("EDITOR").ok())
+        .unwrap_or_else(|| {
+            // Try to detect a good default editor
+            if cfg!(windows) {
+                "notepad".to_string()
+            } else if std::path::Path::new("/usr/bin/code").exists() {
+                "code".to_string()
+            } else if std::path::Path::new("/usr/bin/nvim").exists() {
+                "nvim".to_string()
+            } else if std::path::Path::new("/usr/bin/vim").exists() {
+                "vim".to_string()
+            } else if std::path::Path::new("/usr/bin/nano").exists() {
+                "nano".to_string()
+            } else {
+                "vi".to_string()
+            }
+        })
+}
+
 pub fn prompt_input(prompt: &str) -> Result<String> {
     print!("{}", prompt);
     io::stdout().flush()?;
@@ -24,19 +78,66 @@ pub fn prompt_input_with_autocomplete(prompt: &str, suggestions: &[String]) -> R
     print!("{}", prompt);
     io::stdout().flush()?;
 
-    terminal::enable_raw_mode()?;
+    let _guard = RawModeGuard::new()?;
+    let mut input = String::new();
+    let mut current_suggestion = String::new();
 
-    let result = (|| {
-        let mut input = String::new();
-        let mut current_suggestion = String::new();
+    loop {
+        match event::read()? {
+            Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => {
+                input.push(c);
+                current_suggestion.clear();
 
-        loop {
-            match event::read()? {
-                Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => {
-                    input.push(c);
+                // Find matching suggestion only if input has at least 2 characters
+                if input.len() >= 2 {
+                    for suggestion in suggestions {
+                        if suggestion.starts_with(&input) && suggestion != &input {
+                            current_suggestion = suggestion[input.len()..].to_string();
+                            break;
+                        }
+                    }
+                }
+
+                // Redraw current line with suggestion if any
+                execute!(
+                    io::stdout(),
+                    cursor::MoveToColumn(0),
+                    terminal::Clear(ClearType::CurrentLine),
+                    style::Print(&prompt),
+                    style::Print(&input),
+                    style::Print(OutputStyle::muted(&current_suggestion))
+                )?;
+                io::stdout().flush()?;
+
+                // Move cursor back to end of actual input
+                if !current_suggestion.is_empty() {
+                    execute!(io::stdout(), cursor::MoveLeft(current_suggestion.len() as u16))?;
+                    io::stdout().flush()?;
+                }
+            }
+            Event::Key(KeyEvent { code: KeyCode::Tab, .. }) => {
+                // Accept current suggestion
+                if !current_suggestion.is_empty() {
+                    input.push_str(&current_suggestion);
                     current_suggestion.clear();
 
-                    // Find matching suggestion only if input has at least 2 characters
+                    // Redraw line
+                    execute!(
+                        io::stdout(),
+                        cursor::MoveToColumn(0),
+                        terminal::Clear(ClearType::CurrentLine),
+                        style::Print(&prompt),
+                        style::Print(&input)
+                    )?;
+                    io::stdout().flush()?;
+                }
+            }
+            Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) => {
+                if !input.is_empty() {
+                    input.pop();
+                    current_suggestion.clear();
+
+                    // Find new matching suggestion only if input has at least 2 characters
                     if input.len() >= 2 {
                         for suggestion in suggestions {
                             if suggestion.starts_with(&input) && suggestion != &input {
@@ -46,7 +147,7 @@ pub fn prompt_input_with_autocomplete(prompt: &str, suggestions: &[String]) -> R
                         }
                     }
 
-                    // Redraw current line with suggestion if any
+                    // Redraw current line
                     execute!(
                         io::stdout(),
                         cursor::MoveToColumn(0),
@@ -63,159 +164,97 @@ pub fn prompt_input_with_autocomplete(prompt: &str, suggestions: &[String]) -> R
                         io::stdout().flush()?;
                     }
                 }
-                Event::Key(KeyEvent { code: KeyCode::Tab, .. }) => {
-                    // Accept current suggestion
-                    if !current_suggestion.is_empty() {
-                        input.push_str(&current_suggestion);
-                        current_suggestion.clear();
-
-                        // Redraw line
-                        execute!(
-                            io::stdout(),
-                            cursor::MoveToColumn(0),
-                            terminal::Clear(ClearType::CurrentLine),
-                            style::Print(&prompt),
-                            style::Print(&input)
-                        )?;
-                        io::stdout().flush()?;
-                    }
-                }
-                Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) => {
-                    if !input.is_empty() {
-                        input.pop();
-                        current_suggestion.clear();
-
-                        // Find new matching suggestion only if input has at least 2 characters
-                        if input.len() >= 2 {
-                            for suggestion in suggestions {
-                                if suggestion.starts_with(&input) && suggestion != &input {
-                                    current_suggestion = suggestion[input.len()..].to_string();
-                                    break;
-                                }
-                            }
-                        }
-
-                        // Redraw current line
-                        execute!(
-                            io::stdout(),
-                            cursor::MoveToColumn(0),
-                            terminal::Clear(ClearType::CurrentLine),
-                            style::Print(&prompt),
-                            style::Print(&input),
-                            style::Print(OutputStyle::muted(&current_suggestion))
-                        )?;
-                        io::stdout().flush()?;
-
-                        // Move cursor back to end of actual input
-                        if !current_suggestion.is_empty() {
-                            execute!(io::stdout(), cursor::MoveLeft(current_suggestion.len() as u16))?;
-                            io::stdout().flush()?;
-                        }
-                    }
-                }
-                Event::Key(KeyEvent { code: KeyCode::Enter, .. }) => {
-                    break;
-                }
-                Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
-                    return Err(anyhow::anyhow!("Input cancelled by user"));
-                }
-                _ => {}
             }
+            Event::Key(KeyEvent { code: KeyCode::Enter, .. }) => {
+                break;
+            }
+            Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
+                return Err(anyhow::anyhow!("Input cancelled by user"));
+            }
+            _ => {}
         }
-        Ok(input.trim().to_string())
-    })();
+    }
 
-    terminal::disable_raw_mode()?;
     println!();
-    result
+    Ok(input.trim().to_string())
 }
 
 pub fn prompt_multiline(prompt: &str) -> Result<String> {
     println!("{}", prompt);
 
-    terminal::enable_raw_mode()?;
+    let _guard = InputGuard::new()?;
+    let mut lines = Vec::new();
+    let mut current_line = String::new();
 
-    let _ = execute!(io::stdout(), EnableBracketedPaste);
-
-    let result = (|| {
-        let mut lines = Vec::new();
-        let mut current_line = String::new();
-
-        loop {
-            match event::read()? {
-                Event::Key(KeyEvent {
-                    code: KeyCode::Char('j'),
-                    modifiers: event::KeyModifiers::CONTROL,
-                    ..
-                }) | Event::Key(KeyEvent {
-                    code: KeyCode::Enter,
-                    modifiers: event::KeyModifiers::SHIFT,
-                    ..
-                }) => {
-                    lines.push(current_line.clone());
-                    current_line.clear();
-                    print!("\r\n");
-                    io::stdout().flush()?;
-                }
-                Event::Key(KeyEvent {
-                    code: KeyCode::Enter,
-                    modifiers: event::KeyModifiers::NONE,
-                    ..
-                }) => {
-                    lines.push(current_line.clone());
-                    break;
-                }
-                Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => {
-                    current_line.push(c);
-                    print!("{}", c);
-                    io::stdout().flush()?;
-                }
-                Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) => {
-                    if !current_line.is_empty() {
-                        current_line.pop();
-                        execute!(io::stdout(), cursor::MoveLeft(1), terminal::Clear(ClearType::UntilNewLine))?;
-                        io::stdout().flush()?;
-                    } else if !lines.is_empty() {
-                        current_line = lines.pop().unwrap();
-                        execute!(io::stdout(), cursor::MoveUp(1), cursor::MoveToColumn(1), terminal::Clear(ClearType::UntilNewLine))?;
-                        print!("{}", current_line);
-                        for _ in 0..current_line.len() {
-                            execute!(io::stdout(), cursor::MoveLeft(1))?;
-                        }
-                        io::stdout().flush()?;
-                    }
-                }
-                Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
-                    return Err(anyhow::anyhow!("Input cancelled by user"));
-                }
-                Event::Paste(pasted_text) => {
-                    let mut pasted_lines = pasted_text.lines().peekable();
-                    while let Some(line) = pasted_lines.next() {
-                        if pasted_lines.peek().is_some() {
-                            // This is not the last line, so we add it to the lines buffer
-                            lines.push(current_line.clone() + line);
-                            current_line.clear();
-                            print!("{}\r\n", line);
-                        } else {
-                            // This is the last line, so it becomes the new current_line
-                            current_line.push_str(line);
-                            print!("{}", line);
-                        }
-                    }
-                    io::stdout().flush()?;
-                }
-                _ => {}
+    loop {
+        match event::read()? {
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('j'),
+                modifiers: event::KeyModifiers::CONTROL,
+                ..
+            }) | Event::Key(KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: event::KeyModifiers::SHIFT,
+                ..
+            }) => {
+                lines.push(current_line.clone());
+                current_line.clear();
+                print!("\r\n");
+                io::stdout().flush()?;
             }
+            Event::Key(KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: event::KeyModifiers::NONE,
+                ..
+            }) => {
+                lines.push(current_line.clone());
+                break;
+            }
+            Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => {
+                current_line.push(c);
+                print!("{}", c);
+                io::stdout().flush()?;
+            }
+            Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) => {
+                if !current_line.is_empty() {
+                    current_line.pop();
+                    execute!(io::stdout(), cursor::MoveLeft(1), terminal::Clear(ClearType::UntilNewLine))?;
+                    io::stdout().flush()?;
+                } else if !lines.is_empty() {
+                    current_line = lines.pop().unwrap();
+                    execute!(io::stdout(), cursor::MoveUp(1), cursor::MoveToColumn(1), terminal::Clear(ClearType::UntilNewLine))?;
+                    print!("{}", current_line);
+                    for _ in 0..current_line.len() {
+                        execute!(io::stdout(), cursor::MoveLeft(1))?;
+                    }
+                    io::stdout().flush()?;
+                }
+            }
+            Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
+                return Err(anyhow::anyhow!("Input cancelled by user"));
+            }
+            Event::Paste(pasted_text) => {
+                let mut pasted_lines = pasted_text.lines().peekable();
+                while let Some(line) = pasted_lines.next() {
+                    if pasted_lines.peek().is_some() {
+                        // This is not the last line, so we add it to the lines buffer
+                        lines.push(current_line.clone() + line);
+                        current_line.clear();
+                        print!("{}\r\n", line);
+                    } else {
+                        // This is the last line, so it becomes the new current_line
+                        current_line.push_str(line);
+                        print!("{}", line);
+                    }
+                }
+                io::stdout().flush()?;
+            }
+            _ => {}
         }
-        Ok(lines.join("\n"))
-    })();
-
-    // Cleanup: disable bracketed paste and raw mode.
-    let _ = execute!(io::stdout(), DisableBracketedPaste);
-    let _ = terminal::disable_raw_mode();
+    }
 
     println!();
-    result
+    Ok(lines.join("\n"))
 }
 
 pub fn prompt_yes_no(prompt: &str) -> Result<bool> {
@@ -234,7 +273,7 @@ pub fn select_from_list(items: &[String]) -> Result<Option<usize>> {
         return Ok(None);
     }
 
-    terminal::enable_raw_mode()?;
+    let _guard = RawModeGuard::new()?;
     let mut stdout = io::stdout();
     execute!(stdout, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0))?;
 
@@ -277,7 +316,6 @@ pub fn select_from_list(items: &[String]) -> Result<Option<usize>> {
         }
     };
 
-    terminal::disable_raw_mode()?;
     execute!(stdout, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0))?;
 
     result
@@ -289,25 +327,7 @@ pub fn open_editor_custom(
     line: Option<u32>,
     editor_cmd: Option<&str>
 ) -> Result<String> {
-    let editor = editor_cmd
-        .map(|s| s.to_string())
-        .or_else(|| std::env::var("EDITOR").ok())
-        .unwrap_or_else(|| {
-            // Try to detect a good default editor (same logic as in config.rs)
-            if cfg!(windows) {
-                "notepad".to_string()
-            } else if std::path::Path::new("/usr/bin/code").exists() {
-                "code".to_string()
-            } else if std::path::Path::new("/usr/bin/nvim").exists() {
-                "nvim".to_string()
-            } else if std::path::Path::new("/usr/bin/vim").exists() {
-                "vim".to_string()
-            } else if std::path::Path::new("/usr/bin/nano").exists() {
-                "nano".to_string()
-            } else {
-                "vi".to_string()
-            }
-        });
+    let editor = detect_editor(editor_cmd);
 
     let temp_file = std::env::temp_dir().join(format!("promptheus_{}.tmp", std::process::id()));
 
@@ -371,25 +391,7 @@ pub fn edit_file_direct(
     line: Option<u32>,
     editor_cmd: Option<&str>
 ) -> Result<()> {
-    let editor = editor_cmd
-        .map(|s| s.to_string())
-        .or_else(|| std::env::var("EDITOR").ok())
-        .unwrap_or_else(|| {
-            // Try to detect a good default editor (same logic as in config.rs)
-            if cfg!(windows) {
-                "notepad".to_string()
-            } else if std::path::Path::new("/usr/bin/code").exists() {
-                "code".to_string()
-            } else if std::path::Path::new("/usr/bin/nvim").exists() {
-                "nvim".to_string()
-            } else if std::path::Path::new("/usr/bin/vim").exists() {
-                "vim".to_string()
-            } else if std::path::Path::new("/usr/bin/nano").exists() {
-                "nano".to_string()
-            } else {
-                "vi".to_string()
-            }
-        });
+    let editor = detect_editor(editor_cmd);
 
     let mut cmd = Command::new(&editor);
 

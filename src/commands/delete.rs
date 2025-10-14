@@ -12,11 +12,11 @@ pub fn handle_delete_command(
 ) -> Result<()> {
     let storage = Manager::new(config.clone());
 
-    // Find prompt by ID or title
+    // Find prompt by ID or description
     let prompt = if let Some(found) = storage.find_prompt_by_id(&args.identifier)? {
         found
     } else {
-        // Search by title
+        // Search by description
         let prompts = storage.search_prompts(None, None)?;
         let found = prompts.iter()
             .find(|p| p.description.to_lowercase().contains(&args.identifier.to_lowercase()));
@@ -49,7 +49,7 @@ pub fn handle_delete_command(
                         prompt.description,
                         category,
                         tags,
-                        prompt.description
+                        prompt.content
                     );
                     display_strings.push(display);
                 }
@@ -67,8 +67,8 @@ pub fn handle_delete_command(
     };
 
     println!("Prompt to delete:");
-    println!("  Title: {}", prompt.description);
     println!("  Description: {}", prompt.description);
+    println!("  Content: {}", prompt.content);
     println!("  Created: {}", format_datetime(&prompt.created_at));
 
     if !args.force

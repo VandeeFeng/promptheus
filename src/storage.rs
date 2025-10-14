@@ -77,12 +77,38 @@ impl Storage {
 
         // Filter by query
         if let Some(q) = query {
-            let q_lower = q.to_lowercase();
+            let search_query = if self.config.general.search_case_sensitive {
+                q.to_string()
+            } else {
+                q.to_lowercase()
+            };
+
             prompts = prompts.into_iter()
                 .filter(|p| {
-                    p.description.to_lowercase().contains(&q_lower) ||
-                    p.content.to_lowercase().contains(&q_lower) ||
-                    p.tag.iter().flatten().any(|t| t.to_lowercase().contains(&q_lower))
+                    let description = if self.config.general.search_case_sensitive {
+                        p.description.clone()
+                    } else {
+                        p.description.to_lowercase()
+                    };
+
+                    let content = if self.config.general.search_case_sensitive {
+                        p.content.clone()
+                    } else {
+                        p.content.to_lowercase()
+                    };
+
+                    let tags_match = p.tag.iter().flatten().any(|t| {
+                        let tag_str = if self.config.general.search_case_sensitive {
+                            t.clone()
+                        } else {
+                            t.to_lowercase()
+                        };
+                        tag_str.contains(&search_query)
+                    });
+
+                    description.contains(&search_query) ||
+                    content.contains(&search_query) ||
+                    tags_match
                 })
                 .collect();
         }

@@ -39,7 +39,7 @@ pub fn handle_list_command(
     let format = args.format.as_ref().unwrap_or(&ListFormat::Simple);
 
     match format {
-        ListFormat::Simple => print_simple_list(&filtered_prompts),
+        ListFormat::Simple => print_simple_list(&filtered_prompts, &config),
         ListFormat::Detailed => print_detailed_list(&filtered_prompts),
         ListFormat::Table => print_table_list(&filtered_prompts, &config),
         ListFormat::Json => print_json_list(&filtered_prompts)?,
@@ -80,7 +80,7 @@ fn show_stats(storage: &Storage) -> Result<()> {
     Ok(())
 }
 
-fn print_simple_list(prompts: &[crate::prompt::Prompt]) {
+fn print_simple_list(prompts: &[crate::prompt::Prompt], config: &Config) {
     println!("📝 Prompts ({} found)", prompts.len());
     println!("{}", "=".repeat(50));
 
@@ -101,11 +101,22 @@ fn print_simple_list(prompts: &[crate::prompt::Prompt]) {
             String::new()
         };
 
+        // Show content preview if enabled, otherwise show full content
+        let content_display = if config.general.content_preview {
+            if prompt.content.len() > 100 {
+                format!("{}...", &prompt.content[..100])
+            } else {
+                prompt.content.clone()
+            }
+        } else {
+            prompt.content.clone()
+        };
+
         println!("{}{}{}: {}",
             prompt.description,
             category,
             tags,
-            prompt.content
+            content_display
         );
     }
 }

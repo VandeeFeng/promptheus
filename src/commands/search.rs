@@ -51,20 +51,35 @@ pub fn handle_search_command(
             String::new()
         };
 
-        // Truncate content for display (first 100 chars)
-        let content_preview = if prompt.content.len() > 100 {
-            format!("{}...", &prompt.content[..100])
+        // Add content preview if enabled in config
+        let content_part = if config.general.content_preview {
+            // Truncate content for display (first 100 chars)
+            let content_preview = if prompt.content.len() > 100 {
+                format!("{}...", &prompt.content[..100])
+            } else {
+                prompt.content.clone()
+            };
+            format!(": {}{}", content_preview, tags)
         } else {
-            prompt.content.clone()
+            format!("{}", tags)
         };
 
-        // Format: [description]: content #tag1 #tag2 [category]
-        let display = format!("[{}]: {}{}{}",
+        // Format: [description]: content #tag1 #tag2 [category] (if preview enabled)
+        // or: [description] #tag1 #tag2 [category] (if preview disabled)
+        let display = if config.general.content_preview {
+            format!("[{}]: {}{}",
                               prompt.description,
-                              content_preview,
-                              tags,
+                              content_part,
                               category
-        );
+            )
+        } else {
+            format!("[{}]{}{}",
+                              prompt.description,
+                              content_part,
+                              category
+            )
+        };
+
         display_strings.push(display);
     }
 

@@ -21,7 +21,7 @@ pub struct GeneralConfig {
     pub sort_by: SortBy,
     pub color: bool,
     #[serde(default)]
-    pub search_preview: bool,
+    pub content_preview: bool,
     #[serde(default)]
     pub search_case_sensitive: bool,
     #[serde(default)]
@@ -86,7 +86,7 @@ impl Default for Config {
                 auto_sync: false,
                 sort_by: SortBy::Recency,
                 color: true,
-                search_preview: true,
+                content_preview: true,
                 search_case_sensitive: false,
                 format: None,
             },
@@ -126,6 +126,15 @@ impl Config {
         Self::load_custom(&Self::config_file_path())
     }
 
+    pub fn ensure_config_exists() -> Result<()> {
+        let config_path = Self::config_file_path();
+        if !config_path.exists() {
+            let default_config = Config::default();
+            default_config.save()?;
+        }
+        Ok(())
+    }
+
     pub fn load_custom(config_path: &std::path::Path) -> Result<Self> {
         if !config_path.exists() {
             let default_config = Config::default();
@@ -139,7 +148,35 @@ impl Config {
         let config: Config = toml::from_str(&content)
             .with_context(|| "Failed to parse config file")?;
 
+        config.validate()?;
         Ok(config)
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.general.editor.is_empty() {
+            return Err(anyhow::anyhow!("Editor cannot be empty"));
+        }
+
+        if self.general.select_cmd.is_empty() {
+            return Err(anyhow::anyhow!("Select command cannot be empty"));
+        }
+
+        if let Some(gitlab) = &self.gitlab {
+            if gitlab.url.is_empty() {
+                return Err(anyhow::anyhow!("GitLab URL cannot be empty"));
+            }
+            if gitlab.file_name.is_empty() {
+                return Err(anyhow::anyhow!("GitLab file name cannot be empty"));
+            }
+        }
+
+        if let Some(gist) = &self.gist {
+            if gist.file_name.is_empty() {
+                return Err(anyhow::anyhow!("Gist file name cannot be empty"));
+            }
+        }
+
+        Ok(())
     }
 
     pub fn save(&self) -> Result<()> {

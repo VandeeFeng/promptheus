@@ -16,7 +16,11 @@ use commands::*;
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Load configuration
+    // Ensure configuration exists and load it
+    if cli.config.is_none() {
+        Config::ensure_config_exists()?;
+    }
+
     let config = if let Some(config_path) = &cli.config {
         Config::load_custom(config_path)?
     } else {
@@ -40,8 +44,8 @@ async fn main() -> Result<()> {
         Commands::Edit(ref args) => {
             edit::handle_edit_command(config, args, cli.interactive)?;
         }
-        Commands::Configure => {
-            configure::handle_configure_command(config)?;
+        Commands::Config(ref args) => {
+            configure::handle_config_command(config, args.command.clone())?;
         }
         Commands::Show(ref args) => {
             show::handle_show_command(config, args)?;

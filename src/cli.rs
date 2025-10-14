@@ -42,8 +42,8 @@ pub enum Commands {
     /// Show prompt details
     Show(ShowArgs),
 
-    /// Edit configuration
-    Configure,
+    /// Configuration management
+    Config(ConfigArgs),
 
     /// Sync prompts with remote service
     Sync(SyncArgs),
@@ -232,6 +232,24 @@ pub enum ExportFormat {
     Json,
     Yaml,
     Markdown,
+}
+
+#[derive(Args)]
+pub struct ConfigArgs {
+    #[command(subcommand)]
+    pub command: Option<ConfigCommands>,
+}
+
+#[derive(Subcommand, Clone)]
+pub enum ConfigCommands {
+    /// Show current configuration
+    Show,
+
+    /// Open configuration file in editor
+    Open,
+
+    /// Reset configuration to defaults
+    Reset,
 }
 
 #[cfg(test)]

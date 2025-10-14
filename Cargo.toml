@@ -16,3 +16,5 @@ chrono = { version = "0.4", features = ["serde"] }
 regex = "1.12.2"
 tokio = { version = "1.47.1", features = ["full"] }
 toml_edit = "0.23.7"
+reqwest = { version = "0.12", features = ["json"] }
+async-trait = "0.1"

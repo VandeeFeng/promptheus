@@ -48,6 +48,9 @@ pub enum Commands {
     /// Sync prompts with remote service
     Sync(SyncArgs),
 
+    /// Push local prompts to remote service (force upload)
+    Push,
+
     /// Import prompts from file
     Import(ImportArgs),
 

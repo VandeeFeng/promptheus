@@ -31,10 +31,36 @@ pub struct GeneralConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GistConfig {
     pub file_name: String,
+    #[serde(default, serialize_with = "serialize_option_string", deserialize_with = "deserialize_option_string")]
     pub access_token: Option<String>,
+    #[serde(default, serialize_with = "serialize_option_string", deserialize_with = "deserialize_option_string")]
     pub gist_id: Option<String>,
     pub public: bool,
     pub auto_sync: bool,
+}
+
+/// Serialize Option<String> as empty string when None
+fn serialize_option_string<S>(option: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match option {
+        Some(value) => serializer.serialize_str(value),
+        None => serializer.serialize_str(""),
+    }
+}
+
+/// Deserialize empty string as None
+fn deserialize_option_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    if s.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(s))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,7 +116,13 @@ impl Default for Config {
                 search_case_sensitive: false,
                 format: None,
             },
-            gist: None,
+            gist: Some(GistConfig {
+                file_name: String::new(),
+                access_token: None,
+                gist_id: None,
+                public: false,
+                auto_sync: false,
+            }),
             gitlab: None,
         }
     }
@@ -171,8 +203,28 @@ impl Config {
         }
 
         if let Some(gist) = &self.gist {
-            if gist.file_name.is_empty() {
-                return Err(anyhow::anyhow!("Gist file name cannot be empty"));
+            // Only validate gist configuration if it's actually being used (has gist_id or non-empty file_name)
+            if gist.gist_id.is_some() || !gist.file_name.is_empty() {
+                if gist.file_name.is_empty() {
+                    return Err(anyhow::anyhow!("Gist file name cannot be empty when gist sync is configured"));
+                }
+
+                // Validate access token availability if gist_id is set (for updating existing gist)
+                if gist.gist_id.is_some() && gist.access_token.is_none() {
+                    // Check environment variables
+                    if crate::sync::get_github_token().is_none() {
+                        return Err(anyhow::anyhow!(
+                            "GitHub access token is required for gist sync. Set it in config or use PROMPTHEUS_GITHUB_ACCESS_TOKEN environment variable"
+                        ));
+                    }
+                }
+
+                // Validate file name has proper extension
+                if !gist.file_name.ends_with(".toml") {
+                    return Err(anyhow::anyhow!(
+                        "Gist file name should have .toml extension for proper prompt storage"
+                    ));
+                }
             }
         }
 

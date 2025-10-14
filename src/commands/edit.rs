@@ -6,7 +6,7 @@ use crate::config::Config;
 use crate::storage::Storage;
 use crate::utils;
 
-pub fn handle_edit_command(
+pub async fn handle_edit_command(
     config: Config,
     args: &EditArgs,
     _interactive: bool,
@@ -43,6 +43,12 @@ pub fn handle_edit_command(
     utils::edit_file_direct(&file_to_edit, line_number.map(|l| l as u32), args.editor.as_deref())?;
 
     println!("✓ Prompt file opened for editing.");
+
+    // Auto-sync if enabled
+    if let Err(e) = crate::commands::sync::auto_sync_if_enabled(&config).await {
+        eprintln!("⚠️  Auto-sync failed: {}", e);
+    }
+
     Ok(())
 }
 

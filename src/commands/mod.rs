@@ -6,3 +6,5 @@ pub mod edit;
 pub mod configure;
 pub mod show;
 pub mod delete;
+pub mod sync;
+pub mod push;

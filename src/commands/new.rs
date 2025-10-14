@@ -5,7 +5,7 @@ use crate::storage::Storage;
 use crate::utils;
 use anyhow::Result;
 
-pub fn handle_new_command(
+pub async fn handle_new_command(
     config: Config,
     args: &NewArgs,
     _interactive: bool,
@@ -90,6 +90,11 @@ pub fn handle_new_command(
 
     storage.add_prompt(prompt)?;
     println!("✓ Prompt '{}' saved successfully!", description);
+
+    // Auto-sync if enabled
+    if let Err(e) = crate::commands::sync::auto_sync_if_enabled(&config).await {
+        eprintln!("⚠️  Auto-sync failed: {}", e);
+    }
 
     Ok(())
 }

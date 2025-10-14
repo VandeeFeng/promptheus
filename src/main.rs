@@ -2,6 +2,7 @@ mod cli;
 mod config;
 mod prompt;
 mod storage;
+mod sync;
 mod utils;
 mod commands;
 
@@ -30,7 +31,7 @@ async fn main() -> Result<()> {
     // Handle commands
     match cli.command {
         Commands::New(ref args) => {
-            new::handle_new_command(config, args, cli.interactive)?;
+            new::handle_new_command(config, args, cli.interactive).await?;
         }
         Commands::List(ref args) => {
             list::handle_list_command(config, args)?;
@@ -42,7 +43,7 @@ async fn main() -> Result<()> {
             exec::handle_exec_command(config, args)?;
         }
         Commands::Edit(ref args) => {
-            edit::handle_edit_command(config, args, cli.interactive)?;
+            edit::handle_edit_command(config, args, cli.interactive).await?;
         }
         Commands::Config(ref args) => {
             configure::handle_config_command(config, args.command.clone())?;
@@ -59,8 +60,11 @@ async fn main() -> Result<()> {
         Commands::Categories => {
             handle_categories_command(config)?;
         }
-        Commands::Sync(_) => {
-            println!("⚠️  Sync command not yet implemented");
+        Commands::Sync(ref args) => {
+            commands::sync::handle_sync_command(config, args).await?;
+        }
+        Commands::Push => {
+            commands::push::handle_push_command(config).await?;
         }
         Commands::Import(_) => {
             println!("⚠️  Import command not yet implemented");

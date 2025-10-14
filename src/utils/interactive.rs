@@ -6,7 +6,7 @@ use crossterm::{
     cursor, style,
 };
 use std::io::{self, Write};
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 pub fn prompt_input(prompt: &str) -> Result<String> {
     print!("{}", prompt);
@@ -55,7 +55,6 @@ pub fn prompt_multiline(prompt: &str) -> Result<String> {
                 modifiers: event::KeyModifiers::NONE,
                 ..
             }) => {
-                // Enter: Save and finish
                 lines.push(current_line.clone());
                 break;
             }
@@ -72,14 +71,11 @@ pub fn prompt_multiline(prompt: &str) -> Result<String> {
                     execute!(io::stdout(), cursor::MoveLeft(1), terminal::Clear(ClearType::UntilNewLine))?;
                     io::stdout().flush()?;
                 } else if !lines.is_empty() {
-                    // Current line is empty, go back to previous line
                     current_line = lines.pop().unwrap();
 
-                    // Move cursor up and clear the line, then restore previous line content
                     execute!(io::stdout(), cursor::MoveUp(1), cursor::MoveToColumn(1), terminal::Clear(ClearType::UntilNewLine))?;
                     print!("{}", current_line);
 
-                    // Move cursor to end of the restored line
                     for _ in 0..current_line.len() {
                         execute!(io::stdout(), cursor::MoveLeft(1))?;
                     }
@@ -97,12 +93,9 @@ pub fn prompt_multiline(prompt: &str) -> Result<String> {
         terminal::disable_raw_mode()?;
     }
 
-    // Ensure we're out of raw mode
     let _ = terminal::disable_raw_mode();
 
-    println!(); // Add a newline after input
-
-    // Join all lines with newlines
+    println!();
     Ok(lines.join("\n"))
 }
 
@@ -192,7 +185,7 @@ pub fn multi_select_from_list(items: &[String]) -> Result<Vec<Option<usize>>> {
         println!();
 
         for (i, item) in items.iter().enumerate() {
-            let marker = if selected_items[i] { "✓" } else { " " };
+            let marker = if selected_items[i] { "" } else { " " };
             if i == selected {
                 execute!(stdout, style::Print("> "), style::SetForegroundColor(style::Color::Blue))?;
             } else {
@@ -339,7 +332,21 @@ pub fn select_from_list_with_custom(items: &[String], custom_prompt: &str) -> Re
 }
 
 pub fn open_editor(content: Option<&str>) -> Result<String> {
-    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
+    open_editor_with_line(content, None)
+}
+
+pub fn open_editor_with_line(content: Option<&str>, line: Option<u32>) -> Result<String> {
+    open_editor_custom(content, line, None)
+}
+
+pub fn open_editor_custom(
+    content: Option<&str>,
+    line: Option<u32>,
+    editor_cmd: Option<&str>
+) -> Result<String> {
+    let editor = editor_cmd
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string()));
 
     let temp_file = std::env::temp_dir().join(format!("promptheus_{}.tmp", std::process::id()));
 
@@ -349,9 +356,42 @@ pub fn open_editor(content: Option<&str>) -> Result<String> {
         std::fs::File::create(&temp_file)?;
     }
 
-    let status = Command::new(&editor)
-        .arg(&temp_file)
-        .status()
+    let mut cmd = Command::new(&editor);
+
+    // Add line number argument if supported
+    if let Some(line_num) = line {
+        match editor.as_str() {
+            e if e.contains("vim") || e.contains("vi") || e.contains("nvim") => {
+                cmd.arg(format!("+{}", line_num));
+            }
+            e if e.contains("emacs") || e.contains("nano") => {
+                cmd.arg(format!("+{}", line_num));
+            }
+            e if e.contains("code") => {
+                cmd.arg("--goto");
+                cmd.arg(format!("{}:{}", temp_file.display(), line_num));
+                // For VS Code, we don't need to add the file separately
+                let status = cmd.status()
+                    .with_context(|| format!("Failed to execute editor: {}", editor))?;
+
+                if !status.success() {
+                    return Err(anyhow::anyhow!("Editor exited with non-zero status"));
+                }
+
+                let content = std::fs::read_to_string(&temp_file)?;
+                std::fs::remove_file(&temp_file)?;
+                return Ok(content.trim().to_string());
+            }
+            _ => {
+                // Unknown editor, try with line parameter
+                cmd.arg(format!("+{}", line_num));
+            }
+        }
+    }
+
+    cmd.arg(&temp_file);
+
+    let status = cmd.status()
         .with_context(|| format!("Failed to execute editor: {}", editor))?;
 
     if !status.success() {
@@ -362,6 +402,57 @@ pub fn open_editor(content: Option<&str>) -> Result<String> {
     std::fs::remove_file(&temp_file)?;
 
     Ok(content.trim().to_string())
+}
+
+/// Edit a file directly (not temporary) with line number support
+pub fn edit_file_direct(
+    file_path: &std::path::Path,
+    line: Option<u32>,
+    editor_cmd: Option<&str>
+) -> Result<()> {
+    let editor = editor_cmd
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string()));
+
+    let mut cmd = Command::new(&editor);
+
+    // Add line number argument if supported
+    if let Some(line_num) = line {
+        match editor.as_str() {
+            e if e.contains("vim") || e.contains("vi") || e.contains("nvim") => {
+                cmd.arg(format!("+{}", line_num));
+            }
+            e if e.contains("emacs") || e.contains("nano") => {
+                cmd.arg(format!("+{}", line_num));
+            }
+            e if e.contains("code") => {
+                cmd.arg("--goto");
+                cmd.arg(format!("{}:{}", file_path.display(), line_num));
+                // For VS Code, this is sufficient
+                let status = cmd.status()
+                    .with_context(|| format!("Failed to execute editor: {}", editor))?;
+
+                if !status.success() {
+                    return Err(anyhow::anyhow!("Editor exited with non-zero status"));
+                }
+                return Ok(());
+            }
+            _ => {
+                cmd.arg(format!("+{}", line_num));
+            }
+        }
+    }
+
+    cmd.arg(file_path);
+
+    let status = cmd.status()
+        .with_context(|| format!("Failed to execute editor: {}", editor))?;
+
+    if !status.success() {
+        return Err(anyhow::anyhow!("Editor exited with non-zero status"));
+    }
+
+    Ok(())
 }
 
 pub fn copy_to_clipboard(text: &str) -> Result<()> {
@@ -453,225 +544,4 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
     }
 
     Ok(())
-}
-
-pub fn parse_variables(var_args: &[String]) -> Result<std::collections::HashMap<String, String>> {
-    let mut vars = std::collections::HashMap::new();
-
-    for var in var_args {
-        if let Some(pos) = var.find('=') {
-            let key = var[..pos].trim().to_string();
-            let value = var[pos + 1..].trim().to_string();
-            vars.insert(key, value);
-        } else {
-            return Err(anyhow::anyhow!("Invalid variable format: {}. Expected key=value", var));
-        }
-    }
-
-    Ok(vars)
-}
-
-pub fn fuzzy_search(items: &[String], query: &str) -> Vec<(usize, f64)> {
-    let query_chars: Vec<char> = query.to_lowercase().chars().collect();
-    let mut results = Vec::new();
-
-    for (idx, item) in items.iter().enumerate() {
-        let item_chars: Vec<char> = item.to_lowercase().chars().collect();
-        let score = calculate_fuzzy_score(&item_chars, &query_chars);
-        results.push((idx, score));
-    }
-
-    results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    results
-}
-
-fn calculate_fuzzy_score(item: &[char], query: &[char]) -> f64 {
-    if query.is_empty() {
-        return 1.0;
-    }
-
-    if item.is_empty() {
-        return 0.0;
-    }
-
-    let mut query_idx = 0;
-    let mut matches = 0;
-    let mut total_distance = 0;
-
-    for (_item_idx, &item_char) in item.iter().enumerate() {
-        if query_idx < query.len() && item_char == query[query_idx] {
-            matches += 1;
-            query_idx += 1;
-        } else if matches > 0 {
-            total_distance += 1;
-        }
-    }
-
-    if matches == 0 {
-        return 0.0;
-    }
-
-    let match_ratio = matches as f64 / query.len() as f64;
-    let completion_bonus = (query_idx as f64 / query.len() as f64).powi(2);
-    let distance_penalty = if matches > 1 { total_distance as f64 / (matches - 1) as f64 } else { 0.0 };
-
-    match_ratio * completion_bonus * (1.0 - distance_penalty / 10.0).max(0.0)
-}
-
-/// Interactively search using external tools like fzf or peco
-/// Returns the selected line content
-pub fn interactive_search_with_external_tool(
-    items: &[String],
-    select_cmd: &str,
-    query: Option<&str>
-) -> Result<Option<String>> {
-    if items.is_empty() {
-        return Ok(None);
-    }
-
-    // Check if the select command is available
-    let cmd_parts: Vec<&str> = select_cmd.split_whitespace().collect();
-    if cmd_parts.is_empty() {
-        return Err(anyhow::anyhow!("Invalid select command: {}", select_cmd));
-    }
-
-    // Check if command exists
-    match std::process::Command::new(cmd_parts[0]).arg("--version").output() {
-        Ok(_) => {}, // Command exists
-        Err(_) => {
-            // Command doesn't exist, return None to trigger fallback
-            return Ok(None);
-        }
-    }
-
-    let mut cmd = Command::new(cmd_parts[0]);
-
-    // Add remaining arguments
-    for arg in &cmd_parts[1..] {
-        cmd.arg(arg);
-    }
-
-    // Add common fzf options for better experience
-    if cmd_parts[0] == "fzf" {
-        cmd.args(&[
-            "--height=40%",
-            "--layout=reverse",
-            "--border",
-            "--inline-info",
-            "--prompt=❯ ",
-        ]);
-
-        if let Some(q) = query {
-            cmd.arg(format!("--query={}", q));
-        }
-    } else if cmd_parts[0] == "peco" {
-        // Peco doesn't need as many options
-        if let Some(q) = query {
-            cmd.arg("--query");
-            cmd.arg(q);
-        }
-    }
-
-    // Set up stdin/stdout
-    cmd.stdin(Stdio::piped())
-       .stdout(Stdio::piped())
-       .stderr(Stdio::piped()); // Capture stderr instead of inheriting
-
-    let mut child = cmd.spawn()
-        .with_context(|| format!("Failed to spawn command: {}", select_cmd))?;
-
-    // Write items to stdin
-    if let Some(stdin) = child.stdin.as_mut() {
-        for item in items {
-            writeln!(stdin, "{}", item)?;
-        }
-    }
-
-    // Read the result
-    let output = child.wait_with_output()
-        .with_context(|| format!("Failed to read output from: {}", select_cmd))?;
-
-    // Check if the command was successful
-    // Some tools like fzf return exit code 130 when user presses Ctrl+C or Esc
-    if !output.status.success() {
-        return Ok(None);
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout);
-    let selected = result.trim();
-
-    if selected.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(selected.to_string()))
-    }
-}
-
-/// Parse variables from command string in format <param> or <param=default>
-pub fn parse_command_variables(command: &str) -> Vec<(String, Option<String>)> {
-    use regex::Regex;
-
-    // This regex matches <param> or <param=default_value>
-    let re = Regex::new(r"<([^>=]+)(?:=([^>]*))?>").unwrap();
-    let mut variables = Vec::new();
-
-    for cap in re.captures_iter(command) {
-        let name = cap.get(1).unwrap().as_str().to_string();
-        let default = cap.get(2).map(|m| m.as_str().to_string());
-        variables.push((name, default));
-    }
-
-    variables
-}
-
-/// Replace variables in command with provided values
-pub fn replace_command_variables(
-    command: &str,
-    variables: &std::collections::HashMap<String, String>
-) -> String {
-    use regex::Regex;
-
-    let re = Regex::new(r"<([^>=]+)(?:=([^>]*))?>").unwrap();
-
-    re.replace_all(command, |caps: &regex::Captures| {
-        let var_name = caps.get(1).unwrap().as_str();
-
-        // Use provided value, or default, or empty string
-        if let Some(value) = variables.get(var_name) {
-            value.clone()
-        } else if let Some(default_val) = caps.get(2) {
-            default_val.as_str().to_string()
-        } else {
-            String::new()
-        }
-    }).to_string()
-}
-
-/// Prompt user for variable values interactively
-pub fn prompt_for_variables(
-    variables: Vec<(String, Option<String>)>
-) -> Result<std::collections::HashMap<String, String>> {
-    let mut result = std::collections::HashMap::new();
-
-    for (name, default) in variables {
-        let prompt = if let Some(ref default_val) = default {
-            format!("{} [default: {}]: ", name, default_val)
-        } else {
-            format!("{}: ", name)
-        };
-
-        let input = prompt_input(&prompt)?;
-
-        if input.is_empty() {
-            if let Some(default_val) = default {
-                result.insert(name, default_val);
-            } else {
-                result.insert(name, String::new());
-            }
-        } else {
-            result.insert(name, input);
-        }
-    }
-
-    Ok(result)
 }

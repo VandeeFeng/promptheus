@@ -12,6 +12,8 @@ pub struct Config {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeneralConfig {
     pub prompt_file: PathBuf,
+    #[serde(default)]
+    pub prompt_dirs: Vec<PathBuf>,
     pub editor: String,
     pub select_cmd: String,
     pub default_tags: Vec<String>,
@@ -64,8 +66,22 @@ impl Default for Config {
         Self {
             general: GeneralConfig {
                 prompt_file: config_dir.join("prompts.toml"),
-                editor: std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string()),
-                select_cmd: "fzf".to_string(),
+                prompt_dirs: Vec::new(),
+                editor: std::env::var("EDITOR").unwrap_or_else(|_| {
+                    // Try to detect a good default editor
+                    if cfg!(windows) {
+                        "notepad".to_string()
+                    } else if std::path::Path::new("/usr/bin/code").exists() {
+                        "code".to_string()
+                    } else if std::path::Path::new("/usr/bin/vim").exists() {
+                        "vim".to_string()
+                    } else if std::path::Path::new("/usr/bin/nano").exists() {
+                        "nano".to_string()
+                    } else {
+                        "vi".to_string()
+                    }
+                }),
+                select_cmd: detect_best_select_command(),
                 default_tags: Vec::new(),
                 auto_sync: false,
                 sort_by: SortBy::Recency,
@@ -76,6 +92,31 @@ impl Default for Config {
             },
             gist: None,
             gitlab: None,
+        }
+    }
+}
+
+/// Detect the best available selection command
+fn detect_best_select_command() -> String {
+    if cfg!(windows) {
+        // On Windows, try to find a suitable selector
+        if std::path::Path::new("C:\\Program Files\\Git\\usr\\bin\\fzf.exe").exists() {
+            return "fzf".to_string();
+        }
+        "powershell".to_string() // Fallback to PowerShell
+    } else {
+        // On Unix-like systems, check for available tools
+        if std::path::Path::new("/usr/bin/fzf").exists() ||
+           std::path::Path::new("/usr/local/bin/fzf").exists() {
+            return "fzf".to_string();
+        } else if std::path::Path::new("/usr/bin/sk").exists() ||
+                  std::path::Path::new("/usr/local/bin/sk").exists() {
+            return "sk".to_string();
+        } else if std::path::Path::new("/usr/bin/peco").exists() ||
+                  std::path::Path::new("/usr/local/bin/peco").exists() {
+            return "peco".to_string();
+        } else {
+            "fzf".to_string() // Default assumption
         }
     }
 }

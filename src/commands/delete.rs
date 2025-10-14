@@ -7,7 +7,7 @@ use anyhow::Result;
 pub fn handle_delete_command(
     config: Config,
     args: &DeleteArgs,
-    interactive: bool,
+    _interactive: bool,
 ) -> Result<()> {
     let storage = Storage::new(config.clone());
 

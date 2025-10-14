@@ -89,6 +89,21 @@ pub struct EditArgs {
 
     #[arg(long)]
     pub id: Option<String>,
+
+    #[arg(short = 't', long, help = "Filter by tag")]
+    pub tag: Option<String>,
+
+    #[arg(short = 'c', long, help = "Filter by category")]
+    pub category: Option<String>,
+
+    #[arg(long, help = "Force edit of prompt file directly instead of interactive selection")]
+    pub file: bool,
+
+    #[arg(long, help = "Editor command to use (overrides config)")]
+    pub editor: Option<String>,
+
+    #[arg(long, help = "Line number to jump to")]
+    pub line: Option<u32>,
 }
 
 #[derive(Args)]
@@ -217,4 +232,52 @@ pub enum ExportFormat {
     Json,
     Yaml,
     Markdown,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_edit_args_enhanced() {
+        // Test that the enhanced EditArgs structure works correctly
+        let args = EditArgs {
+            identifier: Some("test-prompt".to_string()),
+            id: None,
+            tag: Some("test".to_string()),
+            category: Some("test-category".to_string()),
+            file: false,
+            editor: Some("vim".to_string()),
+            line: Some(42),
+        };
+
+        assert_eq!(args.identifier, Some("test-prompt".to_string()));
+        assert_eq!(args.tag, Some("test".to_string()));
+        assert_eq!(args.category, Some("test-category".to_string()));
+        assert_eq!(args.editor, Some("vim".to_string()));
+        assert_eq!(args.line, Some(42));
+        assert!(!args.file);
+    }
+
+    #[test]
+    fn test_edit_args_defaults() {
+        // Test default values
+        let args = EditArgs {
+            identifier: None,
+            id: None,
+            tag: None,
+            category: None,
+            file: false,
+            editor: None,
+            line: None,
+        };
+
+        assert!(args.identifier.is_none());
+        assert!(args.id.is_none());
+        assert!(args.tag.is_none());
+        assert!(args.category.is_none());
+        assert!(!args.file);
+        assert!(args.editor.is_none());
+        assert!(args.line.is_none());
+    }
 }

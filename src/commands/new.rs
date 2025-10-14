@@ -8,7 +8,7 @@ use anyhow::Result;
 pub fn handle_new_command(
     config: Config,
     args: &NewArgs,
-    interactive: bool,
+    _interactive: bool,
 ) -> Result<()> {
     let storage = Storage::new(config.clone());
 

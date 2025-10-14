@@ -1,0 +1,136 @@
+use serde::{Deserialize, Serialize};
+use anyhow::{Context, Result};
+use std::path::PathBuf;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Config {
+    pub general: GeneralConfig,
+    pub gist: Option<GistConfig>,
+    pub gitlab: Option<GitLabConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneralConfig {
+    pub prompt_file: PathBuf,
+    pub editor: String,
+    pub select_cmd: String,
+    pub default_tags: Vec<String>,
+    pub auto_sync: bool,
+    pub sort_by: SortBy,
+    pub color: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GistConfig {
+    pub file_name: String,
+    pub access_token: Option<String>,
+    pub gist_id: Option<String>,
+    pub public: bool,
+    pub auto_sync: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitLabConfig {
+    pub file_name: String,
+    pub access_token: Option<String>,
+    pub url: String,
+    pub id: Option<i32>,
+    pub visibility: String,
+    pub auto_sync: bool,
+    pub skip_ssl: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SortBy {
+    Recency,
+    Title,
+    Description,
+    Updated,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        let config_dir = dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("promptheus");
+
+        Self {
+            general: GeneralConfig {
+                prompt_file: config_dir.join("prompts.toml"),
+                editor: std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string()),
+                select_cmd: "fzf".to_string(),
+                default_tags: Vec::new(),
+                auto_sync: false,
+                sort_by: SortBy::Recency,
+                color: true,
+            },
+            gist: None,
+            gitlab: None,
+        }
+    }
+}
+
+impl Config {
+    pub fn load() -> Result<Self> {
+        Self::load_custom(&Self::config_file_path())
+    }
+
+    pub fn load_custom(config_path: &std::path::Path) -> Result<Self> {
+        if !config_path.exists() {
+            let default_config = Config::default();
+            default_config.save()?;
+            return Ok(default_config);
+        }
+
+        let content = std::fs::read_to_string(config_path)
+            .with_context(|| format!("Failed to read config file: {:?}", config_path))?;
+
+        let config: Config = toml::from_str(&content)
+            .with_context(|| "Failed to parse config file")?;
+
+        Ok(config)
+    }
+
+    pub fn save(&self) -> Result<()> {
+        let config_path = Self::config_file_path();
+
+        if let Some(parent) = config_path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create config directory: {:?}", parent))?;
+        }
+
+        let content = toml::to_string_pretty(self)
+            .with_context(|| "Failed to serialize config")?;
+
+        std::fs::write(&config_path, content)
+            .with_context(|| format!("Failed to write config file: {:?}", config_path))?;
+
+        Ok(())
+    }
+
+    pub fn config_file_path() -> PathBuf {
+        dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("promptheus")
+            .join("config.toml")
+    }
+
+    pub fn ensure_prompt_file_exists(&self) -> Result<()> {
+        if !self.general.prompt_file.exists() {
+            if let Some(parent) = self.general.prompt_file.parent() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("Failed to create prompt directory: {:?}", parent))?;
+            }
+
+            let default_collection = crate::prompt::PromptCollection::default();
+            let content = toml::to_string_pretty(&default_collection)
+                .with_context(|| "Failed to create default prompt collection")?;
+
+            std::fs::write(&self.general.prompt_file, content)
+                .with_context(|| format!("Failed to create prompt file: {:?}", self.general.prompt_file))?;
+        }
+
+        Ok(())
+    }
+}

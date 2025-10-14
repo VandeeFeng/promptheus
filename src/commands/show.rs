@@ -3,6 +3,8 @@ use crate::config::Config;
 use crate::storage::Storage;
 use anyhow::Result;
 
+use crate::utils::format_datetime;
+
 pub fn handle_show_command(
     config: Config,
     args: &ShowArgs,
@@ -35,8 +37,8 @@ fn show_prompt_details(prompt: &crate::prompt::Prompt) {
         }
     }
 
-    println!("Created: {}", prompt.created_at.format("%Y-%m-%d-%H:%M:%S"));
-    println!("Updated: {}", prompt.updated_at.format("%Y-%m-%d-%H:%M:%S"));
+    println!("Created: {}", format_datetime(&prompt.created_at));
+    println!("Updated: {}", format_datetime(&prompt.updated_at));
 
     println!("\n📄 Content:");
     println!("{}", "-".repeat(50));

@@ -3,6 +3,8 @@ use crate::config::Config;
 use crate::storage::Storage;
 use anyhow::{Context, Result};
 
+use crate::utils::format_datetime;
+
 pub fn handle_list_command(
     config: Config,
     args: &ListArgs,
@@ -128,8 +130,8 @@ fn print_detailed_list(prompts: &[crate::prompt::Prompt]) {
             }
         }
 
-        println!("   Created: {}", prompt.created_at.format("%Y-%m-%d-%H:%M:%S"));
-        println!("   Updated: {}", prompt.updated_at.format("%Y-%m-%d-%H:%M:%S"));
+        println!("   Created: {}", format_datetime(&prompt.created_at));
+        println!("   Updated: {}", format_datetime(&prompt.updated_at));
 
         // Show preview of content
         let lines: Vec<&str> = prompt.content.lines().take(3).collect();
@@ -211,7 +213,7 @@ fn print_table_list(prompts: &[crate::prompt::Prompt], _config: &Config) {
         println!("│ {:<width_title$} │ {:<width_tags$} │ {} │",
             description,
             tag_str,
-            prompt.updated_at.format("%Y-%m-%d-%H:%M:%S"),
+            format_datetime(&prompt.updated_at),
             width_title = max_title_width,
             width_tags = max_tag_width
         );

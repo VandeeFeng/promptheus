@@ -70,18 +70,3 @@ pub fn prompt_for_variables(
     Ok(result)
 }
 
-pub fn parse_variables(var_args: &[String]) -> Result<std::collections::HashMap<String, String>> {
-    let mut vars = std::collections::HashMap::new();
-
-    for var in var_args {
-        if let Some(pos) = var.find('=') {
-            let key = var[..pos].trim().to_string();
-            let value = var[pos + 1..].trim().to_string();
-            vars.insert(key, value);
-        } else {
-            return Err(anyhow::anyhow!("Invalid variable format: {}. Expected key=value", var));
-        }
-    }
-
-    Ok(vars)
-}

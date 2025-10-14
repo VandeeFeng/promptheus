@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent},
+    event::{self, Event, KeyCode, KeyEvent, EnableBracketedPaste, DisableBracketedPaste},
     execute,
     terminal::{self, ClearType},
     cursor, style,
@@ -20,83 +20,91 @@ pub fn prompt_input(prompt: &str) -> Result<String> {
 
 pub fn prompt_multiline(prompt: &str) -> Result<String> {
     println!("{}", prompt);
-    println!("Enter your content (Enter to save, Ctrl+J for new line):");
-    println!();
+    println!("Enter your content (Enter to save, Shift+Enter for new line):");
 
-    let mut lines = Vec::new();
-    let mut current_line = String::new();
+    terminal::enable_raw_mode()?;
 
-    loop {
-        // Enable raw mode for single character input
-        terminal::enable_raw_mode()?;
+    let _ = execute!(io::stdout(), EnableBracketedPaste);
 
-        match event::read()? {
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('j'),
-                modifiers: event::KeyModifiers::CONTROL,
-                ..
-            }) | Event::Key(KeyEvent {
-                code: KeyCode::Enter,
-                modifiers: event::KeyModifiers::SHIFT,
-                ..
-            }) => {
-                // Ctrl+J or Shift+Enter: Add current line to lines and start a new line
-                lines.push(current_line.clone());
-                current_line.clear();
+    let result = (|| {
+        let mut lines = Vec::new();
+        let mut current_line = String::new();
 
-                // Show newline visually and ensure cursor is at absolute start of new line
-                print!("\r\n");
-                io::stdout().flush()?;
-
-                terminal::disable_raw_mode()?;
-            }
-            Event::Key(KeyEvent {
-                code: KeyCode::Enter,
-                modifiers: event::KeyModifiers::NONE,
-                ..
-            }) => {
-                lines.push(current_line.clone());
-                break;
-            }
-            Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => {
-                current_line.push(c);
-                print!("{}", c);
-                io::stdout().flush()?;
-            }
-            Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) => {
-                if !current_line.is_empty() {
-                    // Delete character from current line
-                    current_line.pop();
-                    // Move cursor back and clear character
-                    execute!(io::stdout(), cursor::MoveLeft(1), terminal::Clear(ClearType::UntilNewLine))?;
+        loop {
+            match event::read()? {
+                Event::Key(KeyEvent {
+                    code: KeyCode::Char('j'),
+                    modifiers: event::KeyModifiers::CONTROL,
+                    ..
+                }) | Event::Key(KeyEvent {
+                    code: KeyCode::Enter,
+                    modifiers: event::KeyModifiers::SHIFT,
+                    ..
+                }) => {
+                    lines.push(current_line.clone());
+                    current_line.clear();
+                    print!("\r\n");
                     io::stdout().flush()?;
-                } else if !lines.is_empty() {
-                    current_line = lines.pop().unwrap();
-
-                    execute!(io::stdout(), cursor::MoveUp(1), cursor::MoveToColumn(1), terminal::Clear(ClearType::UntilNewLine))?;
-                    print!("{}", current_line);
-
-                    for _ in 0..current_line.len() {
-                        execute!(io::stdout(), cursor::MoveLeft(1))?;
+                }
+                Event::Key(KeyEvent {
+                    code: KeyCode::Enter,
+                    modifiers: event::KeyModifiers::NONE,
+                    ..
+                }) => {
+                    lines.push(current_line.clone());
+                    break;
+                }
+                Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => {
+                    current_line.push(c);
+                    print!("{}", c);
+                    io::stdout().flush()?;
+                }
+                Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) => {
+                    if !current_line.is_empty() {
+                        current_line.pop();
+                        execute!(io::stdout(), cursor::MoveLeft(1), terminal::Clear(ClearType::UntilNewLine))?;
+                        io::stdout().flush()?;
+                    } else if !lines.is_empty() {
+                        current_line = lines.pop().unwrap();
+                        execute!(io::stdout(), cursor::MoveUp(1), cursor::MoveToColumn(1), terminal::Clear(ClearType::UntilNewLine))?;
+                        print!("{}", current_line);
+                        for _ in 0..current_line.len() {
+                            execute!(io::stdout(), cursor::MoveLeft(1))?;
+                        }
+                        io::stdout().flush()?;
+                    }
+                }
+                Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
+                    return Err(anyhow::anyhow!("Input cancelled by user"));
+                }
+                Event::Paste(pasted_text) => {
+                    let mut pasted_lines = pasted_text.lines().peekable();
+                    while let Some(line) = pasted_lines.next() {
+                        if pasted_lines.peek().is_some() {
+                            // This is not the last line, so we add it to the lines buffer
+                            lines.push(current_line.clone() + line);
+                            current_line.clear();
+                            print!("{}\r\n", line);
+                        } else {
+                            // This is the last line, so it becomes the new current_line
+                            current_line.push_str(line);
+                            print!("{}", line);
+                        }
                     }
                     io::stdout().flush()?;
                 }
+                _ => {}
             }
-            Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
-                // Allow escape to cancel
-                terminal::disable_raw_mode()?;
-                return Err(anyhow::anyhow!("Input cancelled by user"));
-            }
-            _ => {}
         }
+        Ok(lines.join("\n"))
+    })();
 
-        terminal::disable_raw_mode()?;
-    }
-
+    // Cleanup: disable bracketed paste and raw mode.
+    let _ = execute!(io::stdout(), DisableBracketedPaste);
     let _ = terminal::disable_raw_mode();
 
     println!();
-    Ok(lines.join("\n"))
+    result
 }
 
 pub fn prompt_yes_no(prompt: &str) -> Result<bool> {
@@ -454,6 +462,7 @@ pub fn edit_file_direct(
 
     Ok(())
 }
+
 
 pub fn copy_to_clipboard(text: &str) -> Result<()> {
     use std::io::Write;

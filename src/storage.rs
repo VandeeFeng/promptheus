@@ -57,22 +57,6 @@ impl Storage {
         Ok(())
     }
 
-    pub fn update_prompt(&self, prompt: &Prompt) -> Result<()> {
-        let mut collection = self.load_prompts()?;
-
-        if let Some(prompt_id) = &prompt.id {
-            if let Some(pos) = collection.prompts.iter().position(|p| p.id.as_ref() == Some(prompt_id)) {
-                collection.prompts[pos] = prompt.clone();
-                self.save_prompts(&collection)?;
-            } else {
-                return Err(anyhow::anyhow!("Prompt not found: {}", prompt_id));
-            }
-        } else {
-            return Err(anyhow::anyhow!("Prompt ID is missing"));
-        }
-
-        Ok(())
-    }
 
     pub fn delete_prompt(&self, id: &str) -> Result<()> {
         let mut collection = self.load_prompts()?;

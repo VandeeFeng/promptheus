@@ -3,6 +3,7 @@ use crate::config::Config;
 use crate::storage::Storage;
 use crate::utils;
 use anyhow::Result;
+use crate::utils::format_datetime;
 
 pub fn handle_search_command(
     config: Config,
@@ -59,10 +60,10 @@ pub fn handle_search_command(
 
         // Format: [description]: content #tag1 #tag2 [category]
         let display = format!("[{}]: {}{}{}",
-            prompt.description,
-            content_preview,
-            tags,
-            category
+                              prompt.description,
+                              content_preview,
+                              tags,
+                              category
         );
         display_strings.push(display);
     }
@@ -110,7 +111,7 @@ pub fn handle_search_command(
 fn show_prompt_details(prompt: &crate::prompt::Prompt) {
     println!("\n📝 Prompt Details");
     println!("=================");
-    println!("Title: {}", prompt.description);
+    println!("Description: {}", prompt.description);
     if let Some(id) = &prompt.id {
         println!("ID: {}", id);
     }
@@ -125,8 +126,8 @@ fn show_prompt_details(prompt: &crate::prompt::Prompt) {
         }
     }
 
-    println!("Created: {}", prompt.created_at.format("%Y-%m-%d %H:%M:%S"));
-    println!("Updated: {}", prompt.updated_at.format("%Y-%m-%d %H:%M:%S"));
+    println!("Created: {}", format_datetime(&prompt.created_at));
+    println!("Updated: {}", format_datetime(&prompt.updated_at));
 
     println!("\n📄 Content:");
     println!("{}", "-".repeat(50));

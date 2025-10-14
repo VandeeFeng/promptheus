@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
+use crate::utils::time_format;
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Prompt {
@@ -15,20 +17,15 @@ pub struct Prompt {
     #[serde(rename = "Output")]
     pub output: Option<String>,
     #[serde(rename = "Created_at")]
+    #[serde(with = "time_format")]
     pub created_at: DateTime<Utc>,
     #[serde(rename = "Updated_at")]
+    #[serde(with = "time_format")]
     pub updated_at: DateTime<Utc>,
     #[serde(rename = "Category")]
     pub category: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Variable {
-    pub name: String,
-    pub default_value: Option<String>,
-    pub description: Option<String>,
-    pub required: bool,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptCollection {
@@ -61,19 +58,6 @@ impl Prompt {
         }
     }
 
-    pub fn remove_tag(&mut self, tag: &str) {
-        if let Some(ref mut tags) = self.tag {
-            if let Some(pos) = tags.iter().position(|t| t == tag) {
-                tags.remove(pos);
-                self.updated_at = Utc::now();
-            }
-        }
-    }
-
-    pub fn update_content(&mut self, content: String) {
-        self.content = content;
-        self.updated_at = Utc::now();
-    }
 }
 
 impl Default for PromptCollection {

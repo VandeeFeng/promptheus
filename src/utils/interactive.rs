@@ -8,6 +8,7 @@ use crossterm::{
 use std::io::{self, Write};
 use std::process::Command;
 use std::env;
+use crate::utils::output::OutputStyle;
 
 pub fn prompt_input(prompt: &str) -> Result<String> {
     print!("{}", prompt);
@@ -17,6 +18,116 @@ pub fn prompt_input(prompt: &str) -> Result<String> {
     io::stdin().read_line(&mut input)?;
 
     Ok(input.trim().to_string())
+}
+
+pub fn prompt_input_with_autocomplete(prompt: &str, suggestions: &[String]) -> Result<String> {
+    print!("{}", prompt);
+    io::stdout().flush()?;
+
+    terminal::enable_raw_mode()?;
+
+    let result = (|| {
+        let mut input = String::new();
+        let mut current_suggestion = String::new();
+
+        loop {
+            match event::read()? {
+                Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => {
+                    input.push(c);
+                    current_suggestion.clear();
+
+                    // Find matching suggestion only if input has at least 2 characters
+                    if input.len() >= 2 {
+                        for suggestion in suggestions {
+                            if suggestion.starts_with(&input) && suggestion != &input {
+                                current_suggestion = suggestion[input.len()..].to_string();
+                                break;
+                            }
+                        }
+                    }
+
+                    // Redraw current line with suggestion if any
+                    execute!(
+                        io::stdout(),
+                        cursor::MoveToColumn(0),
+                        terminal::Clear(ClearType::CurrentLine),
+                        style::Print(&prompt),
+                        style::Print(&input),
+                        style::Print(OutputStyle::muted(&current_suggestion))
+                    )?;
+                    io::stdout().flush()?;
+
+                    // Move cursor back to end of actual input
+                    if !current_suggestion.is_empty() {
+                        execute!(io::stdout(), cursor::MoveLeft(current_suggestion.len() as u16))?;
+                        io::stdout().flush()?;
+                    }
+                }
+                Event::Key(KeyEvent { code: KeyCode::Tab, .. }) => {
+                    // Accept current suggestion
+                    if !current_suggestion.is_empty() {
+                        input.push_str(&current_suggestion);
+                        current_suggestion.clear();
+
+                        // Redraw line
+                        execute!(
+                            io::stdout(),
+                            cursor::MoveToColumn(0),
+                            terminal::Clear(ClearType::CurrentLine),
+                            style::Print(&prompt),
+                            style::Print(&input)
+                        )?;
+                        io::stdout().flush()?;
+                    }
+                }
+                Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) => {
+                    if !input.is_empty() {
+                        input.pop();
+                        current_suggestion.clear();
+
+                        // Find new matching suggestion only if input has at least 2 characters
+                        if input.len() >= 2 {
+                            for suggestion in suggestions {
+                                if suggestion.starts_with(&input) && suggestion != &input {
+                                    current_suggestion = suggestion[input.len()..].to_string();
+                                    break;
+                                }
+                            }
+                        }
+
+                        // Redraw current line
+                        execute!(
+                            io::stdout(),
+                            cursor::MoveToColumn(0),
+                            terminal::Clear(ClearType::CurrentLine),
+                            style::Print(&prompt),
+                            style::Print(&input),
+                            style::Print(OutputStyle::muted(&current_suggestion))
+                        )?;
+                        io::stdout().flush()?;
+
+                        // Move cursor back to end of actual input
+                        if !current_suggestion.is_empty() {
+                            execute!(io::stdout(), cursor::MoveLeft(current_suggestion.len() as u16))?;
+                            io::stdout().flush()?;
+                        }
+                    }
+                }
+                Event::Key(KeyEvent { code: KeyCode::Enter, .. }) => {
+                    break;
+                }
+                Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
+                    return Err(anyhow::anyhow!("Input cancelled by user"));
+                }
+                _ => {}
+            }
+        }
+        Ok(input.trim().to_string())
+    })();
+
+    terminal::disable_raw_mode()?;
+    println!();
+    result
 }
 
 pub fn prompt_multiline(prompt: &str) -> Result<String> {
@@ -155,106 +266,6 @@ pub fn select_from_list(items: &[String]) -> Result<Option<usize>> {
             }
             Event::Key(KeyEvent { code: KeyCode::Enter, .. }) => {
                 break Ok(Some(selected));
-            }
-            Event::Key(KeyEvent { code: KeyCode::Char('q'), .. }) => {
-                break Ok(None);
-            }
-            Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
-                break Ok(None);
-            }
-            _ => {}
-        }
-    };
-
-    terminal::disable_raw_mode()?;
-    execute!(stdout, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0))?;
-
-    result
-}
-
-
-pub fn select_from_list_with_custom(items: &[String], custom_prompt: &str) -> Result<Option<usize>> {
-    if items.is_empty() {
-        let custom = prompt_input(custom_prompt)?;
-        return if custom.is_empty() {
-            Ok(None)
-        } else {
-            Err(anyhow::anyhow!("Custom input not implemented in this function"))
-        };
-    }
-
-    terminal::enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0))?;
-
-    let mut selected = 0;
-    let mut show_custom_input = false;
-    let mut custom_input = String::new();
-
-    let result = loop {
-        // Clear screen and redraw
-        execute!(stdout, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0))?;
-
-        println!("Use arrow keys to navigate, Enter to select, 'c' for custom, q to quit:");
-        println!();
-
-        for (i, item) in items.iter().enumerate() {
-            if i == selected && !show_custom_input {
-                execute!(stdout, style::Print("> "), style::SetForegroundColor(style::Color::Blue))?;
-            } else {
-                execute!(stdout, style::Print("  "))?;
-            }
-            println!("{}", item);
-        }
-
-        if show_custom_input {
-            execute!(stdout, style::Print("> "), style::SetForegroundColor(style::Color::Blue))?;
-            println!("{}: {}", custom_prompt, custom_input);
-        } else {
-            println!();
-            execute!(stdout, style::Print("  "))?;
-            println!("+ Add new category");
-        }
-
-        match event::read()? {
-            Event::Key(KeyEvent { code: KeyCode::Up, .. }) => {
-                if selected > 0 && !show_custom_input {
-                    selected -= 1;
-                }
-            }
-            Event::Key(KeyEvent { code: KeyCode::Down, .. }) => {
-                if selected < items.len() && !show_custom_input {
-                    selected += 1;
-                }
-            }
-            Event::Key(KeyEvent { code: KeyCode::Enter, .. }) => {
-                if show_custom_input {
-                    terminal::disable_raw_mode()?;
-                    execute!(stdout, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0))?;
-                    if !custom_input.is_empty() {
-                        // Return a special value indicating custom input
-                        return Ok(None);
-                    }
-                    show_custom_input = false;
-                    terminal::enable_raw_mode()?;
-                } else if selected == items.len() {
-                    show_custom_input = true;
-                    custom_input.clear();
-                } else {
-                    break Ok(Some(selected));
-                }
-            }
-            Event::Key(KeyEvent { code: KeyCode::Char('c'), .. }) => {
-                show_custom_input = true;
-                custom_input.clear();
-            }
-            Event::Key(KeyEvent { code: KeyCode::Char(ch), .. }) if show_custom_input => {
-                if ch.is_ascii() && !ch.is_control() {
-                    custom_input.push(ch);
-                }
-            }
-            Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) if show_custom_input => {
-                custom_input.pop();
             }
             Event::Key(KeyEvent { code: KeyCode::Char('q'), .. }) => {
                 break Ok(None);

@@ -35,16 +35,14 @@ pub async fn handle_new_command(
             prompt.add_tag(tag);
         }
     } else {
-        // Show existing tags for reference
+        // Allow adding custom tags with autocomplete
         let existing_tags = storage.get_all_tags()?;
-        if !existing_tags.is_empty() {
-            println!("\n🏷️  Existing tags: {}", OutputStyle::tags(&existing_tags.join(", ")));
-            println!("Tip: Use --tag <tag1> <tag2> to add tags when creating prompts");
-        }
-
-        // Allow adding custom tags
         loop {
-            let custom_tag = utils::prompt_input(&format!("{} ", OutputStyle::label("Add custom tag (leave empty to continue):")))?;
+            let custom_tag = if existing_tags.is_empty() {
+                utils::prompt_input(&format!("{} ", OutputStyle::label("Add custom tag (leave empty to continue):")))?
+            } else {
+                utils::prompt_input_with_autocomplete(&format!("{} ", OutputStyle::label("Add custom tag (leave empty to continue):")), &existing_tags)?
+            };
             if custom_tag.is_empty() {
                 break;
             }
@@ -61,26 +59,12 @@ pub async fn handle_new_command(
     if let Some(category) = &args.category {
         prompt.category = Some(category.clone());
     } else {
-        // Interactive category selection
+        // Interactive category input with autocomplete
         let existing_categories = storage.get_categories()?;
-        if !existing_categories.is_empty() {
-            println!("\n📁 Select a category (use arrow keys, Enter to select, or type new one):");
-            let selected_index = utils::select_from_list_with_custom(&existing_categories, "Enter new category name: ")?;
 
-            if let Some(index) = selected_index {
-                prompt.category = Some(existing_categories[index].clone());
-            } else {
-                // User selected custom input
-                let custom_category = utils::prompt_input(&format!("{} ", OutputStyle::label("Enter new category name:")))?;
-                if !custom_category.is_empty() {
-                    prompt.category = Some(custom_category);
-                }
-            }
-        } else {
-            let custom_category = utils::prompt_input(&format!("{} ", OutputStyle::label("Enter category (leave empty for none):")))?;
-            if !custom_category.is_empty() {
-                prompt.category = Some(custom_category);
-            }
+        let custom_category = utils::prompt_input_with_autocomplete(&format!("{} ", OutputStyle::label("Enter category (leave empty for none):")), &existing_categories)?;
+        if !custom_category.is_empty() {
+            prompt.category = Some(custom_category);
         }
     }
 

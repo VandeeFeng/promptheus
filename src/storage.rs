@@ -129,6 +129,7 @@ impl Storage {
         let mut categories: Vec<String> = collection.prompts
             .into_iter()
             .filter_map(|p| p.category)
+            .filter(|cat| !cat.is_empty())
             .collect();
         categories.sort();
         categories.dedup();

@@ -7,7 +7,7 @@ pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Err
 where
     S: Serializer,
 {
-    serializer.serialize_str(&date.to_rfc3339())
+    serializer.serialize_str(&date.format(FORMAT).to_string())
 }
 
 pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>

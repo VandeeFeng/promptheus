@@ -4,7 +4,7 @@ use std::fs;
 use crate::cli::EditArgs;
 use crate::config::Config;
 use crate::manager::Manager;
-use crate::utils::{self, print_error};
+use crate::utils::{self, print_sync_warning, handle_not_found};
 
 pub async fn handle_edit_command(
     config: Config,
@@ -17,10 +17,17 @@ pub async fn handle_edit_command(
     let file_to_edit = config.general.prompt_file.clone();
     let line_number = if let Some(identifier) = args.identifier.as_ref().or(args.id.as_ref()) {
         // Find by identifier
-        prompts
-            .iter()
-            .find(|p| p.id.as_ref() == Some(identifier) || p.description.to_lowercase().contains(&identifier.to_lowercase()))
-            .and_then(|p| find_line_number_of_prompt(&file_to_edit, &p.description).ok())
+        if let Some(prompt) = prompts.iter().find(|p| p.id.as_ref() == Some(identifier) || p.description.to_lowercase().contains(&identifier.to_lowercase())) {
+                match find_line_number_of_prompt(&file_to_edit, &prompt.description) {
+                    Ok(line_num) => Some(line_num),
+                    Err(_) => {
+                        handle_not_found("Prompt in TOML file", &prompt.description);
+                        return Ok(());
+                    }
+                }
+            } else {
+                None
+            }
     } else {
         // Interactive selection
         let display_strings: Vec<String> = prompts
@@ -34,7 +41,17 @@ pub async fn handle_edit_command(
 
         if let Some(selected_line) = utils::interactive_search_with_external_tool(&display_strings, &config.general.select_cmd, None)? {
             let selected_index = display_strings.iter().position(|d| d == &selected_line);
-            selected_index.and_then(|i| find_line_number_of_prompt(&file_to_edit, &prompts[i].description).ok())
+            if let Some(i) = selected_index {
+                match find_line_number_of_prompt(&file_to_edit, &prompts[i].description) {
+                    Ok(line_num) => Some(line_num),
+                    Err(_) => {
+                        handle_not_found("Prompt in TOML file", &prompts[i].description);
+                        return Ok(());
+                    }
+                }
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -44,7 +61,7 @@ pub async fn handle_edit_command(
 
     // Auto-sync if enabled
     if let Err(e) = crate::commands::sync::auto_sync_if_enabled(&config).await {
-        print_error(&format!("Auto-sync failed: {}", e));
+        print_sync_warning(&e.to_string());
     }
 
     Ok(())

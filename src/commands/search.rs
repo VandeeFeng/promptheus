@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::manager::Manager;
 use crate::utils;
 use anyhow::Result;
-use crate::utils::{OutputStyle, print_no_prompts_found};
+use crate::utils::{OutputStyle, handle_empty_list, print_cancelled};
 
 pub fn handle_search_command(
     config: Config,
@@ -14,7 +14,7 @@ pub fn handle_search_command(
     let prompts = storage.search_prompts(args.query.as_deref(), args.tag.as_deref())?;
 
     if prompts.is_empty() {
-        print_no_prompts_found();
+        handle_empty_list("prompts matching your criteria");
         return Ok(());
     }
 
@@ -28,7 +28,7 @@ pub fn handle_search_command(
     };
 
     if filtered_prompts.is_empty() {
-        print_no_prompts_found();
+        handle_empty_list("prompts matching all criteria");
         return Ok(());
     }
 
@@ -94,6 +94,7 @@ pub fn handle_search_command(
             find_prompt_by_display_line(&filtered_prompts, &selected_line)?
         } else {
             // External tool was cancelled, exit gracefully
+            print_cancelled("Search cancelled");
             return Ok(());
         }
     } else {
@@ -106,6 +107,7 @@ pub fn handle_search_command(
             find_prompt_by_display_line(&filtered_prompts, &selected_line)?
         } else {
             // External tool was cancelled, exit gracefully
+            print_cancelled("Search cancelled");
             return Ok(());
         }
     };

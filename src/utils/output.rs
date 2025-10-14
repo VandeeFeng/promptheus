@@ -149,13 +149,6 @@ pub fn print_prompt_count(count: usize) {
     }
 }
 
-pub fn print_no_prompts_found() {
-    println!("{}", OutputStyle::muted("No prompts found matching the criteria."));
-}
-
-pub fn print_error(message: &str) {
-    eprintln!("❌ {}", OutputStyle::error(message));
-}
 
 pub fn print_warning(message: &str) {
     println!("⚠️  {}", OutputStyle::warning(message));

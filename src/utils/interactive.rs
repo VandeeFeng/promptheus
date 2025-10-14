@@ -65,6 +65,9 @@ pub fn prompt_input(prompt: &str) -> Result<String> {
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
 
+    // Ensure proper newline after input
+    println!();
+
     Ok(input.trim().to_string())
 }
 
@@ -171,9 +174,16 @@ pub fn prompt_input_with_autocomplete(prompt: &str, suggestions: &[String]) -> O
                 }
             }
             Event::Key(KeyEvent { code: KeyCode::Enter, .. }) => {
+                // Just move to next line without clearing current content
+                if execute!(io::stdout(), style::Print("\r\n")).is_err() {
+                    return None;
+                }
                 break;
             }
             Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
+                // Exit raw mode first before printing
+                drop(_guard);
+                println!(); // Ensure we're on a new line
                 crate::utils::error::print_cancelled("Operation cancelled by user");
                 return None;
             }
@@ -181,7 +191,6 @@ pub fn prompt_input_with_autocomplete(prompt: &str, suggestions: &[String]) -> O
         }
     }
 
-    println!();
     Some(input.trim().to_string())
 }
 
@@ -253,6 +262,11 @@ pub fn prompt_multiline(prompt: &str) -> Option<String> {
                 }
             }
             Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
+                // Exit raw mode first before printing
+                drop(_guard);
+                if execute!(io::stdout(), style::Print("\r\n")).is_err() {
+                    return None;
+                }
                 crate::utils::error::print_cancelled("Operation cancelled by user");
                 return None;
             }
@@ -278,7 +292,14 @@ pub fn prompt_multiline(prompt: &str) -> Option<String> {
         }
     }
 
-    println!();
+    drop(_guard); // Exit raw mode before printing
+    // Ensure we're on a new line after exiting raw mode
+    if execute!(io::stdout(), style::Print("\r\n")).is_err() {
+        return None;
+    }
+    if io::stdout().flush().is_err() {
+        return None;
+    }
     Some(lines.join("\n"))
 }
 

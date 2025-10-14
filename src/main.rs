@@ -12,7 +12,7 @@ use clap::Parser;
 use cli::{Cli, Commands};
 use config::Config;
 use commands::*;
-use utils::print_warning;
+use utils::{print_warning, handle_empty_list};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -83,7 +83,7 @@ fn handle_tags_command(config: Config) -> Result<()> {
     let tags = storage.get_all_tags()?;
 
     if tags.is_empty() {
-        println!("No tags found.");
+        handle_empty_list("tags");
         return Ok(());
     }
 
@@ -101,7 +101,7 @@ fn handle_categories_command(config: Config) -> Result<()> {
     let categories = storage.get_categories()?;
 
     if categories.is_empty() {
-        println!("No categories found.");
+        handle_empty_list("categories");
         return Ok(());
     }
 

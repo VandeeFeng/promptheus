@@ -2,10 +2,33 @@ use crate::cli::SyncArgs;
 use crate::config::Config;
 use crate::manager::Manager;
 use crate::sync::{gist::GistClient, SyncClient, should_sync, SyncDirection};
-use crate::utils::print_warning;
+use crate::utils::{print_warning, print_network_error};
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
 use std::io::{self, Write};
+
+/// Check if an error is likely network-related and provide appropriate user feedback
+fn handle_potential_network_error(error: &anyhow::Error) -> Result<()> {
+    let error_msg = error.to_string().to_lowercase();
+
+    // Check for common network-related error indicators
+    if error_msg.contains("network") ||
+       error_msg.contains("connection") ||
+       error_msg.contains("timeout") ||
+       error_msg.contains("dns") ||
+       error_msg.contains("unreachable") ||
+       error_msg.contains("refused") ||
+       error_msg.contains("host") ||
+       error_msg.contains("ssl") ||
+       error_msg.contains("certificate") ||
+       error_msg.contains("tcp") ||
+       error_msg.contains("http") {
+        print_network_error(&format!("Request failed: {}. Please check your internet connection and try again.", error));
+    }
+
+    // Still return the original error so the calling code can handle it
+    Err(anyhow::Error::msg(error.to_string()))
+}
 
 pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> {
     // Check if any sync backend is configured
@@ -38,7 +61,8 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> 
     // Get remote snippet
     println!("📥 Fetching remote content...");
     let remote_snippet = sync_client.get_remote().await
-        .context("Failed to fetch remote content")?;
+        .context("Failed to fetch remote content")
+        .map_err(|e| handle_potential_network_error(&e).unwrap_err())?;
 
     // Determine sync direction
     let sync_direction = should_sync(local_updated, remote_snippet.updated_at, args.force);
@@ -85,7 +109,8 @@ async fn upload_to_remote(
 
     // Upload to remote
     sync_client.upload(content).await
-        .context("Failed to upload to remote")?;
+        .context("Failed to upload to remote")
+        .map_err(|e| handle_potential_network_error(&e).unwrap_err())?;
 
     println!("✅ Done");
     Ok(())

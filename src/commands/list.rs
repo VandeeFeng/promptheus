@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::manager::Manager;
 use anyhow::{Context, Result};
 
-use crate::utils::{OutputStyle, print_prompt_count, print_no_prompts_found};
+use crate::utils::{OutputStyle, print_prompt_count, handle_empty_list};
 
 pub fn handle_list_command(
     config: Config,
@@ -18,7 +18,7 @@ pub fn handle_list_command(
     let prompts = storage.search_prompts(None, args.tag.as_deref())?;
 
     if prompts.is_empty() {
-        print_no_prompts_found();
+        handle_empty_list("prompts");
         return Ok(());
     }
 
@@ -32,7 +32,7 @@ pub fn handle_list_command(
     };
 
     if filtered_prompts.is_empty() {
-        print_no_prompts_found();
+        handle_empty_list("prompts matching your criteria");
         return Ok(());
     }
 

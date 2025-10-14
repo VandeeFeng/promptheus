@@ -15,7 +15,10 @@ pub async fn handle_new_command(
 
     let description = match &args.description {
         Some(d) => d.clone(),
-        None => utils::prompt_input(&format!("{}: ", OutputStyle::label("Description")))?,
+        None => match utils::prompt_input_with_autocomplete(&format!("{}: ", OutputStyle::label("Description")), &[]) {
+            Some(desc) => desc,
+            None => return Ok(()),
+        },
     };
 
     let content = if let Some(content) = &args.content {
@@ -23,8 +26,10 @@ pub async fn handle_new_command(
     } else if args.editor {
         utils::open_editor_custom(None, None, Some(&config.general.editor))?
     } else {
-        utils::prompt_multiline(&format!("{}", OutputStyle::label("Prompt content:")))
-        .ok_or_else(|| anyhow::anyhow!("Prompt content is required"))?
+        match utils::prompt_multiline(&format!("{}:", OutputStyle::label("Prompt content"))) {
+            Some(content) => content,
+            None => return Ok(()),
+        }
     };
 
     let mut prompt = Prompt::new(description.clone(), content);
@@ -40,9 +45,9 @@ pub async fn handle_new_command(
         let existing_tags = storage.get_all_tags()?;
         loop {
             let custom_tag = if existing_tags.is_empty() {
-                utils::prompt_input(&format!("{} ", OutputStyle::label("Add custom tag (leave empty to continue):")))?
+                utils::prompt_input(&format!("{}: ", OutputStyle::label("Add custom tag (leave empty to continue)")))?
             } else {
-                utils::prompt_input_with_autocomplete(&format!("{} ", OutputStyle::label("Add custom tag (leave empty to continue):")), &existing_tags)
+                utils::prompt_input_with_autocomplete(&format!("{}: ", OutputStyle::label("Add custom tag (leave empty to continue)")), &existing_tags)
                 .unwrap_or_default()
             };
             if custom_tag.is_empty() {
@@ -64,7 +69,7 @@ pub async fn handle_new_command(
         // Interactive category input with autocomplete
         let existing_categories = storage.get_categories()?;
 
-        let custom_category = utils::prompt_input_with_autocomplete(&format!("{} ", OutputStyle::label("Enter category (leave empty for none):")), &existing_categories)
+        let custom_category = utils::prompt_input_with_autocomplete(&format!("{}: ", OutputStyle::label("Enter category (leave empty for none)")), &existing_categories)
                 .unwrap_or_default();
         if !custom_category.is_empty() {
             prompt.category = Some(custom_category);

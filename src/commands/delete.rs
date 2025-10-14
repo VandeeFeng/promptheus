@@ -2,7 +2,7 @@ use crate::cli::DeleteArgs;
 use crate::config::Config;
 use crate::manager::Manager;
 use crate::utils;
-use crate::utils::OutputStyle;
+use crate::utils::{OutputStyle, handle_not_found, print_cancelled, print_system_error, print_empty_result};
 use anyhow::Result;
 
 pub fn handle_delete_command(
@@ -26,6 +26,12 @@ pub fn handle_delete_command(
         } else {
             // If no exact match found and identifier is just "delete", show interactive selection
             if args.identifier.to_lowercase() == "delete" || prompts.len() > 1 {
+                // Handle empty prompts list
+                if prompts.is_empty() {
+                    print_empty_result("prompts");
+                    return Ok(());
+                }
+
                 // Create display strings for selection
                 let mut display_strings = Vec::new();
                 for prompt in &prompts {
@@ -58,10 +64,13 @@ pub fn handle_delete_command(
                 if let Some(selected_index) = utils::select_from_list(&display_strings)? {
                     prompts[selected_index].clone()
                 } else {
-                    return Ok(()); // User cancelled
+                    print_cancelled("Prompt selection cancelled");
+                    return Ok(());
                 }
             } else {
-                return Err(anyhow::anyhow!("Prompt not found: {}", args.identifier));
+                // Handle not found case as a notification, not an error
+                handle_not_found("Prompt", &args.identifier);
+                return Ok(());
             }
         }
     };
@@ -71,13 +80,14 @@ pub fn handle_delete_command(
 
     if !args.force
         && !utils::prompt_yes_no("\nAre you sure you want to delete this prompt?")? {
-            println!("Prompt not deleted.");
+            print_cancelled("Prompt not deleted");
             return Ok(());
         }
 
     if let Some(id) = &prompt.id {
         storage.delete_prompt(id)?;
     } else {
+        print_system_error("Cannot delete prompt: missing ID");
         return Err(anyhow::anyhow!("Cannot delete prompt: missing ID"));
     }
     println!("✓ Prompt '{}' deleted successfully!", prompt.description);

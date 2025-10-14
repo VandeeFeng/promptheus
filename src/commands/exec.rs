@@ -2,6 +2,7 @@ use crate::cli::ExecArgs;
 use crate::config::Config;
 use crate::manager::Manager;
 use crate::utils;
+use crate::utils::{handle_not_found, handle_empty_list, print_cancelled};
 use anyhow::Result;
 
 pub fn handle_exec_command(
@@ -13,10 +14,13 @@ pub fn handle_exec_command(
     match &args.identifier {
         Some(identifier) => {
             // Direct execution with ID or description
-            let prompt = storage.find_prompt(identifier)?
-                .ok_or_else(|| anyhow::anyhow!("Prompt with ID or description '{}' not found", identifier))?;
-
-            handle_prompt_execution(&prompt, args.copy)?;
+            if let Some(prompt) = storage.find_prompt(identifier)? {
+                handle_prompt_execution(&prompt, args.copy)?;
+            } else {
+                // Handle not found as notification, not error
+                handle_not_found("Prompt with ID or description", identifier);
+                return Ok(());
+            }
         }
         None => {
             // Interactive mode - use fzf to select prompt
@@ -34,7 +38,7 @@ fn handle_interactive_exec(config: Config, _args: &ExecArgs) -> Result<()> {
     let prompts = storage.search_prompts(None, None)?;
 
     if prompts.is_empty() {
-        utils::print_no_prompts_found();
+        handle_empty_list("prompts");
         return Ok(());
     }
 
@@ -110,6 +114,7 @@ fn handle_interactive_exec(config: Config, _args: &ExecArgs) -> Result<()> {
         }
     } else {
         // External tool was cancelled, exit gracefully
+        print_cancelled("Prompt selection cancelled");
         return Ok(());
     }
 

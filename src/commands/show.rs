@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::manager::Manager;
 use anyhow::Result;
 
-use crate::utils::OutputStyle;
+use crate::utils::{OutputStyle, handle_not_found};
 
 pub fn handle_show_command(
     config: Config,
@@ -11,10 +11,16 @@ pub fn handle_show_command(
 ) -> Result<()> {
     let storage = Manager::new(config);
 
-    let prompt = storage.find_prompt_by_id(&args.identifier)?
-            .ok_or_else(|| anyhow::anyhow!("Prompt with ID '{}' not found", args.identifier))?;
-
-    show_prompt_details(&prompt);
+    if let Some(prompt) = storage.find_prompt_by_id(&args.identifier)? {
+        show_prompt_details(&prompt);
+    } else {
+        // Try to find by description if ID not found
+        if let Some(prompt) = storage.find_prompt_by_description(&args.identifier)? {
+            show_prompt_details(&prompt);
+        } else {
+            handle_not_found("Prompt", &args.identifier);
+        }
+    }
 
     Ok(())
 }

@@ -2,7 +2,7 @@ use crate::cli::NewArgs;
 use crate::config::Config;
 use crate::models::Prompt;
 use crate::manager::Manager;
-use crate::utils::{self, print_error};
+use crate::utils::{self, print_sync_warning};
 use crate::utils::output::{OutputStyle, print_success};
 use anyhow::Result;
 
@@ -23,7 +23,8 @@ pub async fn handle_new_command(
     } else if args.editor {
         utils::open_editor_custom(None, None, Some(&config.general.editor))?
     } else {
-        utils::prompt_multiline(&format!("{}", OutputStyle::label("Prompt content:")))?
+        utils::prompt_multiline(&format!("{}", OutputStyle::label("Prompt content:")))
+        .ok_or_else(|| anyhow::anyhow!("Prompt content is required"))?
     };
 
     let mut prompt = Prompt::new(description.clone(), content);
@@ -41,7 +42,8 @@ pub async fn handle_new_command(
             let custom_tag = if existing_tags.is_empty() {
                 utils::prompt_input(&format!("{} ", OutputStyle::label("Add custom tag (leave empty to continue):")))?
             } else {
-                utils::prompt_input_with_autocomplete(&format!("{} ", OutputStyle::label("Add custom tag (leave empty to continue):")), &existing_tags)?
+                utils::prompt_input_with_autocomplete(&format!("{} ", OutputStyle::label("Add custom tag (leave empty to continue):")), &existing_tags)
+                .unwrap_or_default()
             };
             if custom_tag.is_empty() {
                 break;
@@ -62,7 +64,8 @@ pub async fn handle_new_command(
         // Interactive category input with autocomplete
         let existing_categories = storage.get_categories()?;
 
-        let custom_category = utils::prompt_input_with_autocomplete(&format!("{} ", OutputStyle::label("Enter category (leave empty for none):")), &existing_categories)?;
+        let custom_category = utils::prompt_input_with_autocomplete(&format!("{} ", OutputStyle::label("Enter category (leave empty for none):")), &existing_categories)
+                .unwrap_or_default();
         if !custom_category.is_empty() {
             prompt.category = Some(custom_category);
         }
@@ -73,7 +76,7 @@ pub async fn handle_new_command(
 
     // Auto-sync if enabled
     if let Err(e) = crate::commands::sync::auto_sync_if_enabled(&config).await {
-        print_error(&format!("Auto-sync failed: {}", e));
+        print_sync_warning(&e.to_string());
     }
 
     Ok(())

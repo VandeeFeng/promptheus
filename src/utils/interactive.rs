@@ -10,34 +10,28 @@ use std::process::Command;
 use std::env;
 use crate::utils::output::OutputStyle;
 
-struct RawModeGuard;
+struct RawModeGuard {
+    bracketed_paste: bool,
+}
 
 impl RawModeGuard {
     fn new() -> Result<Self> {
         terminal::enable_raw_mode()?;
-        Ok(RawModeGuard)
+        Ok(RawModeGuard { bracketed_paste: false })
+    }
+
+    fn with_bracketed_paste() -> Result<Self> {
+        terminal::enable_raw_mode()?;
+        let _ = execute!(io::stdout(), EnableBracketedPaste);
+        Ok(RawModeGuard { bracketed_paste: true })
     }
 }
 
 impl Drop for RawModeGuard {
     fn drop(&mut self) {
-        let _ = terminal::disable_raw_mode();
-    }
-}
-
-struct InputGuard;
-
-impl InputGuard {
-    fn new() -> Result<Self> {
-        terminal::enable_raw_mode()?;
-        let _ = execute!(io::stdout(), EnableBracketedPaste);
-        Ok(InputGuard)
-    }
-}
-
-impl Drop for InputGuard {
-    fn drop(&mut self) {
-        let _ = execute!(io::stdout(), DisableBracketedPaste);
+        if self.bracketed_paste {
+            let _ = execute!(io::stdout(), DisableBracketedPaste);
+        }
         let _ = terminal::disable_raw_mode();
     }
 }
@@ -74,16 +68,22 @@ pub fn prompt_input(prompt: &str) -> Result<String> {
     Ok(input.trim().to_string())
 }
 
-pub fn prompt_input_with_autocomplete(prompt: &str, suggestions: &[String]) -> Result<String> {
+pub fn prompt_input_with_autocomplete(prompt: &str, suggestions: &[String]) -> Option<String> {
     print!("{}", prompt);
-    io::stdout().flush()?;
+    if io::stdout().flush().is_err() {
+        return None;
+    }
 
-    let _guard = RawModeGuard::new()?;
+    let _guard = RawModeGuard::new().ok()?;
     let mut input = String::new();
     let mut current_suggestion = String::new();
 
     loop {
-        match event::read()? {
+        let event = match event::read() {
+            Ok(e) => e,
+            Err(_) => return None,
+        };
+        match event {
             Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => {
                 input.push(c);
                 current_suggestion.clear();
@@ -99,21 +99,23 @@ pub fn prompt_input_with_autocomplete(prompt: &str, suggestions: &[String]) -> R
                 }
 
                 // Redraw current line with suggestion if any
-                execute!(
+                if execute!(
                     io::stdout(),
                     cursor::MoveToColumn(0),
                     terminal::Clear(ClearType::CurrentLine),
                     style::Print(&prompt),
                     style::Print(&input),
                     style::Print(OutputStyle::muted(&current_suggestion))
-                )?;
-                io::stdout().flush()?;
+                ).is_err() || io::stdout().flush().is_err() {
+                    return None;
+                }
 
                 // Move cursor back to end of actual input
-                if !current_suggestion.is_empty() {
-                    execute!(io::stdout(), cursor::MoveLeft(current_suggestion.len() as u16))?;
-                    io::stdout().flush()?;
-                }
+                if !current_suggestion.is_empty()
+                    && (execute!(io::stdout(), cursor::MoveLeft(current_suggestion.len() as u16)).is_err()
+                        || io::stdout().flush().is_err()) {
+                        return None;
+                    }
             }
             Event::Key(KeyEvent { code: KeyCode::Tab, .. }) => {
                 // Accept current suggestion
@@ -122,14 +124,15 @@ pub fn prompt_input_with_autocomplete(prompt: &str, suggestions: &[String]) -> R
                     current_suggestion.clear();
 
                     // Redraw line
-                    execute!(
+                    if execute!(
                         io::stdout(),
                         cursor::MoveToColumn(0),
                         terminal::Clear(ClearType::CurrentLine),
                         style::Print(&prompt),
                         style::Print(&input)
-                    )?;
-                    io::stdout().flush()?;
+                    ).is_err() || io::stdout().flush().is_err() {
+                        return None;
+                    }
                 }
             }
             Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) => {
@@ -148,46 +151,53 @@ pub fn prompt_input_with_autocomplete(prompt: &str, suggestions: &[String]) -> R
                     }
 
                     // Redraw current line
-                    execute!(
+                    if execute!(
                         io::stdout(),
                         cursor::MoveToColumn(0),
                         terminal::Clear(ClearType::CurrentLine),
                         style::Print(&prompt),
                         style::Print(&input),
                         style::Print(OutputStyle::muted(&current_suggestion))
-                    )?;
-                    io::stdout().flush()?;
+                    ).is_err() || io::stdout().flush().is_err() {
+                        return None;
+                    }
 
                     // Move cursor back to end of actual input
-                    if !current_suggestion.is_empty() {
-                        execute!(io::stdout(), cursor::MoveLeft(current_suggestion.len() as u16))?;
-                        io::stdout().flush()?;
-                    }
+                    if !current_suggestion.is_empty()
+                        && (execute!(io::stdout(), cursor::MoveLeft(current_suggestion.len() as u16)).is_err()
+                            || io::stdout().flush().is_err()) {
+                            return None;
+                        }
                 }
             }
             Event::Key(KeyEvent { code: KeyCode::Enter, .. }) => {
                 break;
             }
             Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
-                return Err(anyhow::anyhow!("Input cancelled by user"));
+                crate::utils::error::print_cancelled("Operation cancelled by user");
+                return None;
             }
             _ => {}
         }
     }
 
     println!();
-    Ok(input.trim().to_string())
+    Some(input.trim().to_string())
 }
 
-pub fn prompt_multiline(prompt: &str) -> Result<String> {
+pub fn prompt_multiline(prompt: &str) -> Option<String> {
     println!("{}", prompt);
 
-    let _guard = InputGuard::new()?;
+    let _guard = RawModeGuard::with_bracketed_paste().ok()?;
     let mut lines = Vec::new();
     let mut current_line = String::new();
 
     loop {
-        match event::read()? {
+        let event = match event::read() {
+            Ok(e) => e,
+            Err(_) => return None,
+        };
+        match event {
             Event::Key(KeyEvent {
                 code: KeyCode::Char('j'),
                 modifiers: event::KeyModifiers::CONTROL,
@@ -200,7 +210,9 @@ pub fn prompt_multiline(prompt: &str) -> Result<String> {
                 lines.push(current_line.clone());
                 current_line.clear();
                 print!("\r\n");
-                io::stdout().flush()?;
+                if io::stdout().flush().is_err() {
+                    return None;
+                }
             }
             Event::Key(KeyEvent {
                 code: KeyCode::Enter,
@@ -213,25 +225,36 @@ pub fn prompt_multiline(prompt: &str) -> Result<String> {
             Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => {
                 current_line.push(c);
                 print!("{}", c);
-                io::stdout().flush()?;
+                if io::stdout().flush().is_err() {
+                    return None;
+                }
             }
             Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) => {
                 if !current_line.is_empty() {
                     current_line.pop();
-                    execute!(io::stdout(), cursor::MoveLeft(1), terminal::Clear(ClearType::UntilNewLine))?;
-                    io::stdout().flush()?;
+                    if execute!(io::stdout(), cursor::MoveLeft(1), terminal::Clear(ClearType::UntilNewLine)).is_err()
+                        || io::stdout().flush().is_err() {
+                        return None;
+                    }
                 } else if !lines.is_empty() {
                     current_line = lines.pop().unwrap();
-                    execute!(io::stdout(), cursor::MoveUp(1), cursor::MoveToColumn(1), terminal::Clear(ClearType::UntilNewLine))?;
+                    if execute!(io::stdout(), cursor::MoveUp(1), cursor::MoveToColumn(1), terminal::Clear(ClearType::UntilNewLine)).is_err() {
+                        return None;
+                    }
                     print!("{}", current_line);
                     for _ in 0..current_line.len() {
-                        execute!(io::stdout(), cursor::MoveLeft(1))?;
+                        if execute!(io::stdout(), cursor::MoveLeft(1)).is_err() {
+                            return None;
+                        }
                     }
-                    io::stdout().flush()?;
+                    if io::stdout().flush().is_err() {
+                        return None;
+                    }
                 }
             }
             Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
-                return Err(anyhow::anyhow!("Input cancelled by user"));
+                crate::utils::error::print_cancelled("Operation cancelled by user");
+                return None;
             }
             Event::Paste(pasted_text) => {
                 let mut pasted_lines = pasted_text.lines().peekable();
@@ -247,14 +270,16 @@ pub fn prompt_multiline(prompt: &str) -> Result<String> {
                         print!("{}", line);
                     }
                 }
-                io::stdout().flush()?;
+                if io::stdout().flush().is_err() {
+                    return None;
+                }
             }
             _ => {}
         }
     }
 
     println!();
-    Ok(lines.join("\n"))
+    Some(lines.join("\n"))
 }
 
 pub fn prompt_yes_no(prompt: &str) -> Result<bool> {

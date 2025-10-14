@@ -85,24 +85,35 @@ impl OutputStyle {
     }
 
     pub fn print_prompt_detailed(prompt: &Prompt) {
-        Self::print_header("📝 Prompt Details");
+        println!("{}", Self::title("📝 Prompt Details"));
 
-        Self::print_field_colored("Title", &prompt.description, Self::description);
         if let Some(id) = &prompt.id {
             Self::print_field_colored("ID", id, Self::muted);
         }
+        Self::print_field_colored("Description", &prompt.description, Self::content);
 
-        if let Some(category) = &prompt.category {
-            Self::print_field_colored("Category", category, Self::tag);
+        match &prompt.category {
+            Some(category) if !category.trim().is_empty() => {
+                Self::print_field_colored("Category", category, Self::content);
+            }
+            _ => {
+                Self::print_field_colored("Category", "", Self::content);
+            }
         }
 
-        if let Some(ref tags) = prompt.tag && !tags.is_empty() {
-            Self::print_field_colored("Tags", &tags.join(", "), Self::tags);
+        if let Some(ref tags) = prompt.tag {
+            if tags.is_empty() {
+                Self::print_field_colored("Tags", "", Self::command);
+            } else {
+                Self::print_field_colored("Tags", &tags.join(", "), Self::command);
+            }
+        } else {
+            Self::print_field_colored("Tags", "", Self::command);
         }
 
         Self::print_field_colored("Created", &format_datetime(&prompt.created_at), Self::muted);
 
-        println!("\n{}:", Self::header("📄 Content"));
+        println!("\n{}:", Self::title("📄 Content"));
         println!("{}", Self::content(&prompt.content));
     }
 

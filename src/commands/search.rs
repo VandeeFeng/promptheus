@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::manager::Manager;
 use crate::utils;
 use anyhow::Result;
-use crate::utils::{format_datetime, OutputStyle, print_no_prompts_found};
+use crate::utils::{OutputStyle, print_no_prompts_found};
 
 pub fn handle_search_command(
     config: Config,
@@ -124,35 +124,7 @@ pub fn handle_search_command(
 }
 
 fn show_prompt_details(prompt: &crate::models::Prompt) {
-    OutputStyle::print_header("📝 Prompt Details");
-
-    OutputStyle::print_field_colored("Description", &prompt.description, OutputStyle::description);
-    if let Some(id) = &prompt.id {
-        OutputStyle::print_field_colored("ID", id, OutputStyle::muted);
-    }
-
-    // Display Tag field (first tag only, or empty line if no tags)
-    if let Some(ref tags) = prompt.tag && !tags.is_empty() {
-        OutputStyle::print_field_colored("Tag", &tags[0], OutputStyle::tag);
-    } else {
-        OutputStyle::print_field("Tag", "");
-    }
-
-    if let Some(category) = &prompt.category {
-        OutputStyle::print_field_colored("Category", category, OutputStyle::tag);
-    }
-
-    if let Some(ref tags) = prompt.tag
-        && !tags.is_empty() {
-            OutputStyle::print_field_colored("Tags", &tags.join(", "), OutputStyle::tags);
-        }
-
-    OutputStyle::print_field_colored("Created", &format_datetime(&prompt.created_at), OutputStyle::muted);
-
-    println!("\n{}:", OutputStyle::header("📄 Content"));
-    println!("{}", OutputStyle::separator());
-    println!("{}", OutputStyle::content(&prompt.content));
-    println!("{}", OutputStyle::separator());
+    OutputStyle::print_prompt_detailed(prompt);
 }
 
 fn handle_prompt_execution(prompt: &crate::models::Prompt, copy_to_clipboard: bool) -> Result<()> {

@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::manager::Manager;
 use anyhow::{Context, Result};
 
-use crate::utils::{format_datetime, OutputStyle, print_prompt_count, print_no_prompts_found};
+use crate::utils::{OutputStyle, print_prompt_count, print_no_prompts_found};
 
 pub fn handle_list_command(
     config: Config,
@@ -126,33 +126,7 @@ fn print_detailed_list(prompts: &[crate::models::Prompt]) {
 
     for (i, prompt) in prompts.iter().enumerate() {
         println!("\n{}. {}", i + 1, OutputStyle::description(&prompt.description));
-        if let Some(id) = &prompt.id {
-            OutputStyle::print_field_colored("ID", id, OutputStyle::muted);
-        }
-
-        if let Some(category) = &prompt.category {
-            OutputStyle::print_field_colored("Category", category, OutputStyle::tag);
-        }
-
-        if let Some(ref tags) = prompt.tag
-            && !tags.is_empty() {
-                OutputStyle::print_field_colored("Tags", &tags.join(", "), OutputStyle::tags);
-            }
-
-        OutputStyle::print_field_colored("Created", &format_datetime(&prompt.created_at), OutputStyle::muted);
-        OutputStyle::print_field_colored("Updated", &format_datetime(&prompt.updated_at), OutputStyle::muted);
-
-        // Show preview of content
-        let lines: Vec<&str> = prompt.content.lines().take(3).collect();
-        if !lines.is_empty() {
-            println!("   {}:", OutputStyle::label("Preview"));
-            for line in lines {
-                println!("     {}", OutputStyle::content(line));
-            }
-            if prompt.content.lines().count() > 3 {
-                println!("     {}", OutputStyle::muted("..."));
-            }
-        }
+        OutputStyle::print_prompt_list_preview(prompt);
 
         if i < prompts.len() - 1 {
             println!("{}", OutputStyle::separator());
@@ -222,7 +196,7 @@ fn print_table_list(prompts: &[crate::models::Prompt], _config: &Config) {
         println!("│ {:<width_title$} │ {:<width_tags$} │ {} │",
             OutputStyle::description(&description),
             OutputStyle::tags(&tag_str),
-            OutputStyle::muted(&format_datetime(&prompt.updated_at)),
+            OutputStyle::muted(&crate::utils::format_datetime(&prompt.updated_at)),
             width_title = max_title_width,
             width_tags = max_tag_width
         );

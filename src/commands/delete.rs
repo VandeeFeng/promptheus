@@ -2,7 +2,7 @@ use crate::cli::DeleteArgs;
 use crate::config::Config;
 use crate::manager::Manager;
 use crate::utils;
-use crate::utils::format_datetime;
+use crate::utils::OutputStyle;
 use anyhow::Result;
 
 pub fn handle_delete_command(
@@ -67,9 +67,7 @@ pub fn handle_delete_command(
     };
 
     println!("Prompt to delete:");
-    println!("  Description: {}", prompt.description);
-    println!("  Content: {}", prompt.content);
-    println!("  Created: {}", format_datetime(&prompt.created_at));
+    OutputStyle::print_prompt_basic(&prompt);
 
     if !args.force
         && !utils::prompt_yes_no("\nAre you sure you want to delete this prompt?")? {

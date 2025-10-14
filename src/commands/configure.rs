@@ -84,13 +84,13 @@ fn handle_config_help() -> Result<()> {
 
 fn handle_open_command() -> Result<()> {
     // Ensure config file exists
-    Config::ensure_config_exists()?;
+    let config = Config::load()?;
 
     println!("Opening configuration file in editor...");
     let config_path = Config::config_file_path();
     println!("File: {}", config_path.display());
 
-    utils::edit_file_direct(&config_path, None, None)?;
+    utils::edit_file_direct(&config_path, None, Some(&config.general.editor))?;
     Ok(())
 }
 

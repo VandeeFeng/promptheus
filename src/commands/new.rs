@@ -20,7 +20,7 @@ pub async fn handle_new_command(
     let content = if let Some(content) = &args.content {
         content.clone()
     } else if args.editor {
-        utils::open_editor(None)?
+        utils::open_editor_custom(None, None, Some(&config.general.editor))?
     } else {
         utils::prompt_multiline("Prompt content:")?
     };
@@ -34,16 +34,11 @@ pub async fn handle_new_command(
             prompt.add_tag(tag);
         }
     } else {
-        // Interactive tag selection
+        // Show existing tags for reference
         let existing_tags = storage.get_all_tags()?;
         if !existing_tags.is_empty() {
-            println!("\n🏷️  Select tags (use arrow keys, Space to select, Enter to finish):");
-            let selected_tags = utils::multi_select_from_list(&existing_tags)?;
-            for tag in selected_tags {
-                if let Some(tag) = tag {
-                    prompt.add_tag(existing_tags[tag].clone());
-                }
-            }
+            println!("\n🏷️  Existing tags: {}", existing_tags.join(", "));
+            println!("Tip: Use --tag <tag1> <tag2> to add tags when creating prompts");
         }
 
         // Allow adding custom tags

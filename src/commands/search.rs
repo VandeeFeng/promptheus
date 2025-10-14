@@ -68,15 +68,15 @@ pub fn handle_search_command(
         // or: [description] #tag1 #tag2 [category] (if preview disabled)
         let display = if config.general.content_preview {
             format!("[{}]: {}{}",
-                              prompt.description,
-                              content_part,
-                              category
+                    prompt.description,
+                    content_part,
+                    category
             )
         } else {
             format!("[{}]{}{}",
-                              prompt.description,
-                              content_part,
-                              category
+                    prompt.description,
+                    content_part,
+                    category
             )
         };
 
@@ -142,7 +142,6 @@ fn show_prompt_details(prompt: &crate::prompt::Prompt) {
     }
 
     println!("Created: {}", format_datetime(&prompt.created_at));
-    println!("Updated: {}", format_datetime(&prompt.updated_at));
 
     println!("\n📄 Content:");
     println!("{}", "-".repeat(50));

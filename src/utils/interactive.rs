@@ -174,71 +174,6 @@ pub fn select_from_list(items: &[String]) -> Result<Option<usize>> {
     result
 }
 
-pub fn multi_select_from_list(items: &[String]) -> Result<Vec<Option<usize>>> {
-    if items.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    terminal::enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0))?;
-
-    let mut selected = 0;
-    let mut selected_items = vec![false; items.len()];
-    let result = loop {
-        // Clear screen and redraw
-        execute!(stdout, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0))?;
-
-        println!("Use arrow keys to navigate, Space to select/deselect, Enter to finish, q to quit:");
-        println!();
-
-        for (i, item) in items.iter().enumerate() {
-            let marker = if selected_items[i] { "" } else { " " };
-            if i == selected {
-                execute!(stdout, style::Print("> "), style::SetForegroundColor(style::Color::Blue))?;
-            } else {
-                execute!(stdout, style::Print("  "))?;
-            }
-            println!("[{}] {}", marker, item);
-        }
-
-        match event::read()? {
-            Event::Key(KeyEvent { code: KeyCode::Up, .. }) => {
-                if selected > 0 {
-                    selected -= 1;
-                }
-            }
-            Event::Key(KeyEvent { code: KeyCode::Down, .. }) => {
-                if selected < items.len() - 1 {
-                    selected += 1;
-                }
-            }
-            Event::Key(KeyEvent { code: KeyCode::Char(' '), .. }) => {
-                selected_items[selected] = !selected_items[selected];
-            }
-            Event::Key(KeyEvent { code: KeyCode::Enter, .. }) => {
-                let selected_indices: Vec<Option<usize>> = selected_items
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, &selected)| if selected { Some(Some(i)) } else { None })
-                    .collect();
-                break Ok(selected_indices);
-            }
-            Event::Key(KeyEvent { code: KeyCode::Char('q'), .. }) => {
-                break Ok(Vec::new());
-            }
-            Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
-                break Ok(Vec::new());
-            }
-            _ => {}
-        }
-    };
-
-    terminal::disable_raw_mode()?;
-    execute!(stdout, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0))?;
-
-    result
-}
 
 pub fn select_from_list_with_custom(items: &[String], custom_prompt: &str) -> Result<Option<usize>> {
     if items.is_empty() {
@@ -339,13 +274,6 @@ pub fn select_from_list_with_custom(items: &[String], custom_prompt: &str) -> Re
     result
 }
 
-pub fn open_editor(content: Option<&str>) -> Result<String> {
-    open_editor_with_line(content, None)
-}
-
-pub fn open_editor_with_line(content: Option<&str>, line: Option<u32>) -> Result<String> {
-    open_editor_custom(content, line, None)
-}
 
 pub fn open_editor_custom(
     content: Option<&str>,
@@ -354,7 +282,23 @@ pub fn open_editor_custom(
 ) -> Result<String> {
     let editor = editor_cmd
         .map(|s| s.to_string())
-        .unwrap_or_else(|| std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string()));
+        .or_else(|| std::env::var("EDITOR").ok())
+        .unwrap_or_else(|| {
+            // Try to detect a good default editor (same logic as in config.rs)
+            if cfg!(windows) {
+                "notepad".to_string()
+            } else if std::path::Path::new("/usr/bin/code").exists() {
+                "code".to_string()
+            } else if std::path::Path::new("/usr/bin/nvim").exists() {
+                "nvim".to_string()
+            } else if std::path::Path::new("/usr/bin/vim").exists() {
+                "vim".to_string()
+            } else if std::path::Path::new("/usr/bin/nano").exists() {
+                "nano".to_string()
+            } else {
+                "vi".to_string()
+            }
+        });
 
     let temp_file = std::env::temp_dir().join(format!("promptheus_{}.tmp", std::process::id()));
 
@@ -420,7 +364,23 @@ pub fn edit_file_direct(
 ) -> Result<()> {
     let editor = editor_cmd
         .map(|s| s.to_string())
-        .unwrap_or_else(|| std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string()));
+        .or_else(|| std::env::var("EDITOR").ok())
+        .unwrap_or_else(|| {
+            // Try to detect a good default editor (same logic as in config.rs)
+            if cfg!(windows) {
+                "notepad".to_string()
+            } else if std::path::Path::new("/usr/bin/code").exists() {
+                "code".to_string()
+            } else if std::path::Path::new("/usr/bin/nvim").exists() {
+                "nvim".to_string()
+            } else if std::path::Path::new("/usr/bin/vim").exists() {
+                "vim".to_string()
+            } else if std::path::Path::new("/usr/bin/nano").exists() {
+                "nano".to_string()
+            } else {
+                "vi".to_string()
+            }
+        });
 
     let mut cmd = Command::new(&editor);
 

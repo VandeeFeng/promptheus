@@ -144,8 +144,8 @@ pub struct SearchArgs {
 
 #[derive(Args)]
 pub struct ExecArgs {
-    #[arg(help = "Prompt ID or title")]
-    pub identifier: String,
+    #[arg(help = "Prompt ID or description")]
+    pub identifier: Option<String>,
 
     #[arg(long)]
     pub copy: bool,

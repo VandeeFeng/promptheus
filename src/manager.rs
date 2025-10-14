@@ -71,6 +71,21 @@ impl Manager {
         Ok(collection.prompts.into_iter().find(|p| p.id.as_ref() == Some(&id.to_string())))
     }
 
+    pub fn find_prompt_by_description(&self, description: &str) -> Result<Option<Prompt>> {
+        let collection = self.load_prompts()?;
+        Ok(collection.prompts.into_iter().find(|p| p.description == description))
+    }
+
+    pub fn find_prompt(&self, identifier: &str) -> Result<Option<Prompt>> {
+        // First try to find by ID
+        if let Some(prompt) = self.find_prompt_by_id(identifier)? {
+            return Ok(Some(prompt));
+        }
+
+        // If not found by ID, try to find by description
+        self.find_prompt_by_description(identifier)
+    }
+
     pub fn search_prompts(&self, query: Option<&str>, tag: Option<&str>) -> Result<Vec<Prompt>> {
         let collection = self.load_prompts()?;
         let mut prompts = collection.prompts;

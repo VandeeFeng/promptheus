@@ -7,6 +7,7 @@ use crossterm::{
 };
 use std::io::{self, Write};
 use std::process::Command;
+use std::env;
 
 pub fn prompt_input(prompt: &str) -> Result<String> {
     print!("{}", prompt);
@@ -422,6 +423,42 @@ pub fn edit_file_direct(
 }
 
 
+#[derive(Debug, Clone, Copy)]
+pub enum DisplayServer {
+    Wayland,
+    X11,
+    Unknown,
+}
+
+/// Detect the current display server (Wayland or X11) on Linux systems
+fn detect_display_server() -> DisplayServer {
+    // Check XDG_SESSION_TYPE first (most reliable)
+    if let Ok(session_type) = env::var("XDG_SESSION_TYPE") {
+        match session_type.to_lowercase().as_str() {
+            "wayland" => return DisplayServer::Wayland,
+            "x11" => return DisplayServer::X11,
+            _ => {}
+        }
+    }
+
+    // Fallback checks
+    if env::var("WAYLAND_DISPLAY").is_ok() {
+        DisplayServer::Wayland
+    } else if env::var("DISPLAY").is_ok() {
+        DisplayServer::X11
+    } else {
+        DisplayServer::Unknown
+    }
+}
+
+/// Check if a command is available in the system
+fn command_exists(cmd: &str) -> bool {
+    Command::new(cmd)
+        .arg("--version")
+        .output()
+        .is_ok()
+}
+
 pub fn copy_to_clipboard(text: &str) -> Result<()> {
     use std::io::Write;
 
@@ -447,42 +484,89 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
 
     #[cfg(target_os = "linux")]
     {
-        // Try xclip first, then xsel
-        if let Ok(mut child) = Command::new("xclip")
-            .args(["-selection", "clipboard"])
-            .stdin(std::process::Stdio::piped())
-            .spawn()
-        {
-            if let Some(stdin) = child.stdin.as_mut() {
-                stdin.write_all(text.as_bytes())
-                    .context("Failed to write to xclip")?;
+        let display_server = detect_display_server();
+
+        let tools: Vec<(&str, Vec<&str>)> = match display_server {
+            DisplayServer::Wayland => {
+                // On Wayland, prefer wl-clipboard tools
+                vec![
+                    ("wl-copy", vec![]),
+                    ("xclip", vec!["-selection", "clipboard"]),
+                    ("xsel", vec!["--clipboard", "--input"]),
+                ]
             }
+            DisplayServer::X11 => {
+                // On X11, prefer X11 tools but keep wl-clipboard as fallback
+                vec![
+                    ("xclip", vec!["-selection", "clipboard"]),
+                    ("xsel", vec!["--clipboard", "--input"]),
+                    ("wl-copy", vec![]),
+                ]
+            }
+            DisplayServer::Unknown => {
+                // Unknown system, try all available tools in reasonable order
+                vec![
+                    ("wl-copy", vec![]),
+                    ("xclip", vec!["-selection", "clipboard"]),
+                    ("xsel", vec!["--clipboard", "--input"]),
+                ]
+            }
+        };
 
-            let status = child.wait()
-                .context("Failed to wait for xclip")?;
+        let mut last_error = None;
+        let mut available_tools = Vec::new();
 
-            if status.success() {
-                return Ok(());
+        for (tool, args) in tools {
+            if command_exists(tool) {
+                available_tools.push(tool);
+
+                if let Ok(mut child) = Command::new(tool)
+                    .args(args)
+                    .stdin(std::process::Stdio::piped())
+                    .spawn()
+                {
+                    if let Some(stdin) = child.stdin.as_mut()
+                        && let Err(e) = stdin.write_all(text.as_bytes()) {
+                        last_error = Some(anyhow::anyhow!("Failed to write to {}: {}", tool, e));
+                        continue;
+                    }
+
+                    match child.wait() {
+                        Ok(status) if status.success() => return Ok(()),
+                        Ok(_) => last_error = Some(anyhow::anyhow!("{} failed", tool)),
+                        Err(e) => last_error = Some(anyhow::anyhow!("Failed to wait for {}: {}", tool, e)),
+                    }
+                } else {
+                    last_error = Some(anyhow::anyhow!("Failed to spawn {}", tool));
+                }
             }
         }
 
-        let mut child = Command::new("xsel")
-            .args(["--clipboard", "--input"])
-            .stdin(std::process::Stdio::piped())
-            .spawn()
-            .context("Failed to spawn xsel")?;
-
-        if let Some(stdin) = child.stdin.as_mut() {
-            stdin.write_all(text.as_bytes())
-                .context("Failed to write to xsel")?;
+        // Provide helpful error message based on display server
+        if available_tools.is_empty() {
+            match display_server {
+                DisplayServer::Wayland => {
+                    return Err(anyhow::anyhow!(
+                        "No clipboard tools found. Please install wl-clipboard:\n  sudo pacman -S wl-clipboard  # Arch\n  sudo apt install wl-clipboard  # Ubuntu/Debian"
+                    ));
+                }
+                DisplayServer::X11 => {
+                    return Err(anyhow::anyhow!(
+                        "No clipboard tools found. Please install one of:\n  sudo pacman -S xclip  # Arch\n  sudo apt install xclip  # Ubuntu/Debian"
+                    ));
+                }
+                DisplayServer::Unknown => {
+                    return Err(anyhow::anyhow!(
+                        "No clipboard tools found. Please install:\n  sudo pacman -S wl-clipboard xclip  # Arch\n  sudo apt install wl-clipboard xclip  # Ubuntu/Debian"
+                    ));
+                }
+            }
         }
 
-        let status = child.wait()
-            .context("Failed to wait for xsel")?;
-
-        if !status.success() {
-            return Err(anyhow::anyhow!("xsel failed"));
+        if let Some(error) = last_error {
+            return Err(error);
         }
+        return Err(anyhow::anyhow!("All available clipboard tools failed"));
     }
 
     #[cfg(target_os = "windows")]
@@ -510,5 +594,7 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
         return Err(anyhow::anyhow!("Clipboard not supported on this platform"));
     }
 
+    // This line should never be reached due to the platform-specific returns above
+    #[allow(unreachable_code)]
     Ok(())
 }

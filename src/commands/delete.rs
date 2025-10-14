@@ -61,7 +61,7 @@ pub fn handle_delete_command(
                 }
 
                 println!("🗑️  Select a prompt to delete:");
-                if let Some(selected_index) = utils::select_from_list(&display_strings)? {
+                if let Some(selected_index) = utils::select_from_list(&display_strings) {
                     prompts[selected_index].clone()
                 } else {
                     print_cancelled("Prompt selection cancelled");

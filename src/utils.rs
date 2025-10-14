@@ -6,7 +6,7 @@ use crossterm::{
     cursor, style,
 };
 use std::io::{self, Write};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 pub fn prompt_input(prompt: &str) -> Result<String> {
     print!("{}", prompt);
@@ -472,8 +472,6 @@ pub fn parse_variables(var_args: &[String]) -> Result<std::collections::HashMap<
 }
 
 pub fn fuzzy_search(items: &[String], query: &str) -> Vec<(usize, f64)> {
-    use std::collections::HashMap;
-
     let query_chars: Vec<char> = query.to_lowercase().chars().collect();
     let mut results = Vec::new();
 
@@ -500,7 +498,7 @@ fn calculate_fuzzy_score(item: &[char], query: &[char]) -> f64 {
     let mut matches = 0;
     let mut total_distance = 0;
 
-    for (item_idx, &item_char) in item.iter().enumerate() {
+    for (_item_idx, &item_char) in item.iter().enumerate() {
         if query_idx < query.len() && item_char == query[query_idx] {
             matches += 1;
             query_idx += 1;
@@ -518,4 +516,162 @@ fn calculate_fuzzy_score(item: &[char], query: &[char]) -> f64 {
     let distance_penalty = if matches > 1 { total_distance as f64 / (matches - 1) as f64 } else { 0.0 };
 
     match_ratio * completion_bonus * (1.0 - distance_penalty / 10.0).max(0.0)
+}
+
+/// Interactively search using external tools like fzf or peco
+/// Returns the selected line content
+pub fn interactive_search_with_external_tool(
+    items: &[String],
+    select_cmd: &str,
+    query: Option<&str>
+) -> Result<Option<String>> {
+    if items.is_empty() {
+        return Ok(None);
+    }
+
+    // Check if the select command is available
+    let cmd_parts: Vec<&str> = select_cmd.split_whitespace().collect();
+    if cmd_parts.is_empty() {
+        return Err(anyhow::anyhow!("Invalid select command: {}", select_cmd));
+    }
+
+    // Check if command exists
+    match std::process::Command::new(cmd_parts[0]).arg("--version").output() {
+        Ok(_) => {}, // Command exists
+        Err(_) => {
+            // Command doesn't exist, return None to trigger fallback
+            return Ok(None);
+        }
+    }
+
+    let mut cmd = Command::new(cmd_parts[0]);
+
+    // Add remaining arguments
+    for arg in &cmd_parts[1..] {
+        cmd.arg(arg);
+    }
+
+    // Add common fzf options for better experience
+    if cmd_parts[0] == "fzf" {
+        cmd.args(&[
+            "--height=40%",
+            "--layout=reverse",
+            "--border",
+            "--inline-info",
+            "--prompt=❯ ",
+        ]);
+
+        if let Some(q) = query {
+            cmd.arg(format!("--query={}", q));
+        }
+    } else if cmd_parts[0] == "peco" {
+        // Peco doesn't need as many options
+        if let Some(q) = query {
+            cmd.arg("--query");
+            cmd.arg(q);
+        }
+    }
+
+    // Set up stdin/stdout
+    cmd.stdin(Stdio::piped())
+       .stdout(Stdio::piped())
+       .stderr(Stdio::piped()); // Capture stderr instead of inheriting
+
+    let mut child = cmd.spawn()
+        .with_context(|| format!("Failed to spawn command: {}", select_cmd))?;
+
+    // Write items to stdin
+    if let Some(stdin) = child.stdin.as_mut() {
+        for item in items {
+            writeln!(stdin, "{}", item)?;
+        }
+    }
+
+    // Read the result
+    let output = child.wait_with_output()
+        .with_context(|| format!("Failed to read output from: {}", select_cmd))?;
+
+    // Check if the command was successful
+    // Some tools like fzf return exit code 130 when user presses Ctrl+C or Esc
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let result = String::from_utf8_lossy(&output.stdout);
+    let selected = result.trim();
+
+    if selected.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(selected.to_string()))
+    }
+}
+
+/// Parse variables from command string in format <param> or <param=default>
+pub fn parse_command_variables(command: &str) -> Vec<(String, Option<String>)> {
+    use regex::Regex;
+
+    // This regex matches <param> or <param=default_value>
+    let re = Regex::new(r"<([^>=]+)(?:=([^>]*))?>").unwrap();
+    let mut variables = Vec::new();
+
+    for cap in re.captures_iter(command) {
+        let name = cap.get(1).unwrap().as_str().to_string();
+        let default = cap.get(2).map(|m| m.as_str().to_string());
+        variables.push((name, default));
+    }
+
+    variables
+}
+
+/// Replace variables in command with provided values
+pub fn replace_command_variables(
+    command: &str,
+    variables: &std::collections::HashMap<String, String>
+) -> String {
+    use regex::Regex;
+
+    let re = Regex::new(r"<([^>=]+)(?:=([^>]*))?>").unwrap();
+
+    re.replace_all(command, |caps: &regex::Captures| {
+        let var_name = caps.get(1).unwrap().as_str();
+
+        // Use provided value, or default, or empty string
+        if let Some(value) = variables.get(var_name) {
+            value.clone()
+        } else if let Some(default_val) = caps.get(2) {
+            default_val.as_str().to_string()
+        } else {
+            String::new()
+        }
+    }).to_string()
+}
+
+/// Prompt user for variable values interactively
+pub fn prompt_for_variables(
+    variables: Vec<(String, Option<String>)>
+) -> Result<std::collections::HashMap<String, String>> {
+    let mut result = std::collections::HashMap::new();
+
+    for (name, default) in variables {
+        let prompt = if let Some(ref default_val) = default {
+            format!("{} [default: {}]: ", name, default_val)
+        } else {
+            format!("{}: ", name)
+        };
+
+        let input = prompt_input(&prompt)?;
+
+        if input.is_empty() {
+            if let Some(default_val) = default {
+                result.insert(name, default_val);
+            } else {
+                result.insert(name, String::new());
+            }
+        } else {
+            result.insert(name, input);
+        }
+    }
+
+    Ok(result)
 }

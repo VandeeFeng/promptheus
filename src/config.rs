@@ -18,6 +18,12 @@ pub struct GeneralConfig {
     pub auto_sync: bool,
     pub sort_by: SortBy,
     pub color: bool,
+    #[serde(default)]
+    pub search_preview: bool,
+    #[serde(default)]
+    pub search_case_sensitive: bool,
+    #[serde(default)]
+    pub format: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,6 +70,9 @@ impl Default for Config {
                 auto_sync: false,
                 sort_by: SortBy::Recency,
                 color: true,
+                search_preview: true,
+                search_case_sensitive: false,
+                format: None,
             },
             gist: None,
             gitlab: None,

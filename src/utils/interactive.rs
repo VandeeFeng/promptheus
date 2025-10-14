@@ -202,7 +202,7 @@ fn prompt_input_with_autocomplete_internal(prompt: &str, suggestions: &[String])
                 current_suggestion = find_autocomplete_suggestion(&input, suggestions);
 
                 // Redraw current line with suggestion if any
-                guard.print_line(&prompt, &input,
+                guard.print_line(prompt, &input,
                     if current_suggestion.is_empty() { None } else { Some(&current_suggestion) }
                 )?;
 
@@ -216,7 +216,7 @@ fn prompt_input_with_autocomplete_internal(prompt: &str, suggestions: &[String])
                     current_suggestion.clear();
 
                     // Redraw line
-                    guard.print_line(&prompt, &input, None)?;
+                    guard.print_line(prompt, &input, None)?;
                 }
             }
             Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) => {
@@ -225,7 +225,7 @@ fn prompt_input_with_autocomplete_internal(prompt: &str, suggestions: &[String])
                     current_suggestion = find_autocomplete_suggestion(&input, suggestions);
 
                     // Redraw current line
-                    guard.print_line(&prompt, &input,
+                    guard.print_line(prompt, &input,
                         if current_suggestion.is_empty() { None } else { Some(&current_suggestion) }
                     )?;
 
@@ -380,10 +380,8 @@ pub fn select_from_list(items: &[String]) -> Option<usize> {
                 if execute!(stdout, style::Print("> "), style::SetForegroundColor(style::Color::Blue)).is_err() {
                     return None;
                 }
-            } else {
-                if execute!(stdout, style::Print("  ")).is_err() {
-                    return None;
-                }
+            } else if execute!(stdout, style::Print("  ")).is_err() {
+                return None;
             }
             println!("{}", item);
         }

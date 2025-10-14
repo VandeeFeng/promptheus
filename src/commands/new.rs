@@ -45,10 +45,12 @@ pub async fn handle_new_command(
         let existing_tags = storage.get_all_tags()?;
         loop {
             let custom_tag = if existing_tags.is_empty() {
-                utils::prompt_input(&format!("{}: ", OutputStyle::label("Add custom tag (leave empty to continue)")))?
+                utils::prompt_input(&format!("{}: ", OutputStyle::label("Tag")))?
             } else {
-                utils::prompt_input_with_autocomplete(&format!("{}: ", OutputStyle::label("Add custom tag (leave empty to continue)")), &existing_tags)
-                .unwrap_or_default()
+                match utils::prompt_input_with_autocomplete(&format!("{}: ", OutputStyle::label("Tag")), &existing_tags) {
+                    Some(tag) => tag,
+                    None => return Ok(()),
+                }
             };
             if custom_tag.is_empty() {
                 break;
@@ -69,8 +71,10 @@ pub async fn handle_new_command(
         // Interactive category input with autocomplete
         let existing_categories = storage.get_categories()?;
 
-        let custom_category = utils::prompt_input_with_autocomplete(&format!("{}: ", OutputStyle::label("Enter category (leave empty for none)")), &existing_categories)
-                .unwrap_or_default();
+        let custom_category = match utils::prompt_input_with_autocomplete(&format!("{}: ", OutputStyle::label("Category")), &existing_categories) {
+            Some(category) => category,
+            None => return Ok(()),
+        };
         if !custom_category.is_empty() {
             prompt.category = Some(custom_category);
         }

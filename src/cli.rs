@@ -1,5 +1,10 @@
 use clap::{Parser, Subcommand, Args};
 use std::path::PathBuf;
+use anyhow::Result;
+use crate::config::Config;
+use crate::commands::{new, list, search, exec, edit, configure, show, delete};
+use crate::commands::{sync, push};
+use crate::utils::print_warning;
 
 #[derive(Parser)]
 #[command(name = "promptheus")]
@@ -17,6 +22,50 @@ pub struct Cli {
 
     #[command(subcommand)]
     pub command: Commands,
+}
+
+impl Commands {
+    pub async fn execute(self, config: Config, interactive: bool) -> Result<()> {
+        match self {
+            Commands::New(args) => {
+                new::handle_new_command(config, &args, interactive).await?;
+            }
+            Commands::List(args) => {
+                list::handle_list_command(config, &args)?;
+            }
+            Commands::Search(args) => {
+                search::handle_search_command(config, &args)?;
+            }
+            Commands::Exec(args) => {
+                exec::handle_exec_command(config, &args)?;
+            }
+            Commands::Edit(args) => {
+                edit::handle_edit_command(config, &args, interactive).await?;
+            }
+            Commands::Config(args) => {
+                configure::handle_config_command(config, args.command.clone())?;
+            }
+            Commands::Show(args) => {
+                show::handle_show_command(config, &args)?;
+            }
+            Commands::Delete(args) => {
+                delete::handle_delete_command(config, &args, interactive)?;
+            }
+            Commands::Sync(args) => {
+                sync::handle_sync_command(config, &args).await?;
+            }
+            Commands::Push => {
+                push::handle_push_command(config).await?;
+            }
+            Commands::Import(_) => {
+                print_warning("Import command not yet implemented");
+            }
+            Commands::Export(_) => {
+                print_warning("Export command not yet implemented");
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Subcommand)]
@@ -57,12 +106,7 @@ pub enum Commands {
     /// Export prompts to file
     Export(ExportArgs),
 
-    /// Show all available tags
-    Tags,
-
-    /// Show all available categories
-    Categories,
-}
+  }
 
 #[derive(Args)]
 pub struct NewArgs {
@@ -122,6 +166,12 @@ pub struct ListArgs {
 
     #[arg(long)]
     pub stats: bool,
+
+    #[arg(long, help = "Show all available tags")]
+    pub tags: bool,
+
+    #[arg(long, help = "Show all available categories")]
+    pub categories: bool,
 }
 
 #[derive(Args)]

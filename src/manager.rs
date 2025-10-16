@@ -173,6 +173,11 @@ impl Manager {
         Ok(categories)
     }
 
+    pub fn get_all_prompts(&self) -> Result<Vec<Prompt>> {
+        let collection = self.load_prompts()?;
+        Ok(collection.prompts)
+    }
+
     pub fn get_prompt_stats(&self) -> Result<PromptStats> {
         let collection = self.load_prompts()?;
         let total_prompts = collection.prompts.len();

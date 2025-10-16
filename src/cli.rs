@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use crate::config::Config;
 use crate::commands::{new, list, search, exec, edit, configure, show, delete};
-use crate::commands::{sync, push};
+use crate::commands::{sync, push, export};
 use crate::utils::print_warning;
 
 #[derive(Parser)]
@@ -57,8 +57,8 @@ impl Commands {
             Commands::Import(_) => {
                 print_warning("Import command not yet implemented");
             }
-            Commands::Export(_) => {
-                print_warning("Export command not yet implemented");
+            Commands::Export(args) => {
+                export::handle_export_command(config, &args)?;
             }
         }
         Ok(())
@@ -248,17 +248,11 @@ pub struct ImportArgs {
 
 #[derive(Args)]
 pub struct ExportArgs {
-    #[arg(help = "File to export to")]
-    pub file: PathBuf,
+    #[arg(help = "File to export to (default: prompts.html in config directory)")]
+    pub output: Option<String>,
 
-    #[arg(short, long)]
-    pub format: ExportFormat,
-
-    #[arg(short, long)]
-    pub tag: Option<String>,
-
-    #[arg(short = 'c', long)]
-    pub category: Option<String>,
+    #[arg(long, help = "Open exported file in browser")]
+    pub open: bool,
 }
 
 #[derive(clap::ValueEnum, Clone)]

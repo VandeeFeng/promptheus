@@ -17,7 +17,6 @@ pub struct Cli {
     #[arg(short, long)]
     pub debug: bool,
 
-  
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -104,7 +103,7 @@ pub enum Commands {
     /// Export prompts to file
     Export(ExportArgs),
 
-  }
+}
 
 #[derive(Args)]
 pub struct NewArgs {

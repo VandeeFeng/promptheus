@@ -12,10 +12,7 @@ pub struct RemoteSnippet {
 
 #[async_trait]
 pub trait SyncClient {
-    /// Get remote snippet content and metadata
     async fn get_remote(&self) -> Result<RemoteSnippet>;
-
-    /// Upload local content to remote service
     async fn upload(&self, content: String) -> Result<()>;
 }
 
@@ -41,9 +38,6 @@ pub enum SyncDirection {
     None,
 }
 
-/// Get GitHub access token from environment variable
 pub fn get_github_token() -> Option<String> {
-    std::env::var("PROMPTHEUS_GITHUB_ACCESS_TOKEN")
-        .or_else(|_| std::env::var("PET_GITHUB_ACCESS_TOKEN"))
-        .ok()
+    std::env::var("PROMPTHEUS_GITHUB_ACCESS_TOKEN").ok()
 }

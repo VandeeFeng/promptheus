@@ -11,6 +11,16 @@ pub fn handle_list_command(
 ) -> Result<()> {
     let storage = Manager::new(config.clone());
 
+    // Handle tags listing
+    if args.tags {
+        return handle_tags_command(config);
+    }
+
+    // Handle categories listing
+    if args.categories {
+        return handle_categories_command(config);
+    }
+
     if args.stats {
         return show_stats(&storage);
     }
@@ -213,5 +223,41 @@ fn print_json_list(prompts: &[crate::models::Prompt]) -> Result<()> {
     let json = serde_json::to_string_pretty(prompts)
         .context("Failed to serialize prompts to JSON")?;
     println!("{}", json);
+    Ok(())
+}
+
+pub fn handle_tags_command(config: Config) -> Result<()> {
+    let storage = Manager::new(config);
+    let tags = storage.get_all_tags()?;
+
+    if tags.is_empty() {
+        handle_empty_list("tags");
+        return Ok(());
+    }
+
+    println!("🏷️  Available Tags ({})", tags.len());
+    println!("====================");
+    for tag in tags {
+        println!("  {}", tag);
+    }
+
+    Ok(())
+}
+
+pub fn handle_categories_command(config: Config) -> Result<()> {
+    let storage = Manager::new(config);
+    let categories = storage.get_categories()?;
+
+    if categories.is_empty() {
+        handle_empty_list("categories");
+        return Ok(());
+    }
+
+    println!("📁 Available Categories ({})", categories.len());
+    println!("=======================");
+    for category in categories {
+        println!("  {}", category);
+    }
+
     Ok(())
 }

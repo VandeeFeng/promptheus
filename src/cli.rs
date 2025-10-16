@@ -17,18 +17,16 @@ pub struct Cli {
     #[arg(short, long)]
     pub debug: bool,
 
-    #[arg(short = 'i', long, help = "Run in interactive mode")]
-    pub interactive: bool,
-
+  
     #[command(subcommand)]
     pub command: Commands,
 }
 
 impl Commands {
-    pub async fn execute(self, config: Config, interactive: bool) -> Result<()> {
+    pub async fn execute(self, config: Config) -> Result<()> {
         match self {
             Commands::New(args) => {
-                new::handle_new_command(config, &args, interactive).await?;
+                new::handle_new_command(config, &args).await?;
             }
             Commands::List(args) => {
                 list::handle_list_command(config, &args)?;
@@ -40,7 +38,7 @@ impl Commands {
                 exec::handle_exec_command(config, &args)?;
             }
             Commands::Edit(args) => {
-                edit::handle_edit_command(config, &args, interactive).await?;
+                edit::handle_edit_command(config, &args).await?;
             }
             Commands::Config(args) => {
                 configure::handle_config_command(config, args.command.clone())?;
@@ -49,7 +47,7 @@ impl Commands {
                 show::handle_show_command(config, &args)?;
             }
             Commands::Delete(args) => {
-                delete::handle_delete_command(config, &args, interactive)?;
+                delete::handle_delete_command(config, &args)?;
             }
             Commands::Sync(args) => {
                 sync::handle_sync_command(config, &args).await?;

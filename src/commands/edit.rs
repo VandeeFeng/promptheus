@@ -9,7 +9,6 @@ use crate::utils::{self, print_sync_warning, handle_not_found};
 pub async fn handle_edit_command(
     config: Config,
     args: &EditArgs,
-    _interactive: bool,
 ) -> Result<()> {
     let storage = Manager::new(config.clone());
     let prompts = storage.search_prompts(args.tag.as_deref(), args.category.as_deref())?;

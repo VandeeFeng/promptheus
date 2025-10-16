@@ -8,7 +8,6 @@ use anyhow::Result;
 pub fn handle_delete_command(
     config: Config,
     args: &DeleteArgs,
-    _interactive: bool,
 ) -> Result<()> {
     let storage = Manager::new(config.clone());
 

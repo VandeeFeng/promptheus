@@ -9,7 +9,6 @@ use anyhow::Result;
 pub async fn handle_new_command(
     config: Config,
     args: &NewArgs,
-    _interactive: bool,
 ) -> Result<()> {
     let storage = Manager::new(config.clone());
 

@@ -28,7 +28,7 @@ async fn main() -> Result<()> {
     };
 
     // Execute command
-    cli.command.execute(config, cli.interactive).await?;
+    cli.command.execute(config).await?;
 
     Ok(())
 }

@@ -29,7 +29,7 @@ Promptheus is a powerful prompt management system designed for developers, conte
 
 ```bash
 # Build from source
-git clone <repository-url>
+git clone https://github.com/VandeeFeng/promptheus.git
 cd promptheus
 cargo build --release
 cargo install --path .
@@ -223,9 +223,6 @@ promptheus --config /path/to/config.toml <command>
 
 # Enable debug mode
 promptheus --debug <command>
-
-# Enable interactive mode
-promptheus --interactive <command>
 ```
 
 ## Usage Examples
@@ -259,7 +256,7 @@ Example `config.toml`:
 
 ```toml
 [general]
-prompt_file = "/home/usr/.config/promptheus/prompts.toml"
+prompt_file = "/home/user/.config/promptheus/prompts.toml"
 prompt_dirs = []
 editor = "vim"
 select_cmd = "fzf"

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "A Rust-based prompt CLI management tool"
 license = "MIT"
+readme = "README.md"
 repository = "https://github.com/vandee/promptheus"
 keywords = ["prompt", "management", "cli"]
 categories = ["command-line-utilities", "development-tools"]

@@ -3,7 +3,6 @@ use std::fs;
 
 use crate::cli::EditArgs;
 use crate::config::Config;
-use crate::commands::handlers::InteractiveSelector;
 use crate::utils::{self, print_sync_warning, handle_not_found};
 
 pub async fn handle_edit_command(
@@ -28,8 +27,8 @@ pub async fn handle_edit_command(
                 None
             }
     } else {
-        // Interactive selection using unified trait interface
-        if let Some(selected_prompt) = storage.select_interactive_prompts(prompts, &config)? {
+        // Interactive selection
+        if let Some(selected_prompt) = storage.select_interactive_prompts(prompts)? {
             match find_line_number_of_prompt(&file_to_edit, &selected_prompt.description) {
                 Ok(line_num) => Some(line_num),
                 Err(_) => {

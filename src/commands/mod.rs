@@ -9,4 +9,3 @@ pub mod delete;
 pub mod sync;
 pub mod push;
 pub mod export;
-pub mod handlers;

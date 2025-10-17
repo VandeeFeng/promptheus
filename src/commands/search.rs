@@ -29,11 +29,7 @@ pub fn handle_search_command(
         &config.general.select_cmd,
         args.query.as_deref()
     )? {
-        if let Some(index) = manager.find_prompt_by_display_line(&prompts, &selected_line)? {
-            Some(&prompts[index])
-        } else {
-            None
-        }
+        manager.find_prompt_by_display_line(&prompts, &selected_line)?.map(|index| &prompts[index])
     } else {
         print_cancelled("Search cancelled");
         return Ok(());

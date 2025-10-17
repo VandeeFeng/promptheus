@@ -7,7 +7,6 @@ use std::fs;
 pub fn handle_export_command(config: Config, args: &ExportArgs) -> Result<()> {
     let storage = crate::manager::Manager::new(config.clone());
 
-    // Get all prompts using PromptOperations trait
     let prompts = storage.search_prompts(None, None)
         .context("Failed to load prompts")?;
 

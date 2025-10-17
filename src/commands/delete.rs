@@ -1,7 +1,6 @@
 use crate::cli::DeleteArgs;
 use crate::config::Config;
 use crate::manager::Manager;
-use crate::commands::handlers::InteractiveSelector;
 use crate::utils;
 use crate::utils::{OutputStyle, print_cancelled, print_system_error, print_empty_result};
 use anyhow::Result;
@@ -24,7 +23,7 @@ pub fn handle_delete_command(
             return Ok(());
         }
 
-        // Use the trait-based interactive selection
+        // Use interactive selection
         if let Some(selected_prompt) = manager.select_interactive(
             prompts,
             |p| {
@@ -46,7 +45,6 @@ pub fn handle_delete_command(
 
                 format!("{}{}{}: {}", p.description, category, tags, p.content)
             },
-            &config
         )? {
             selected_prompt
         } else {

@@ -39,7 +39,6 @@ pub async fn handle_new_command(
             prompt.add_tag(tag);
         }
     } else {
-        // Allow adding custom tags with autocomplete using PromptOperations trait
         let existing_tags = storage.get_all_tags()?;
         loop {
             let custom_tag = match utils::prompt_input_with_autocomplete(&format!("{}: ", OutputStyle::label("Tag")), &existing_tags) {
@@ -62,7 +61,6 @@ pub async fn handle_new_command(
     if let Some(category) = &args.category {
         prompt.category = Some(category.clone());
     } else {
-        // Interactive category input with autocomplete using PromptOperations trait
         let existing_categories = storage.get_categories()?;
 
         let custom_category = match utils::prompt_input_with_autocomplete(&format!("{}: ", OutputStyle::label("Category")), &existing_categories) {

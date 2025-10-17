@@ -10,7 +10,6 @@ pub fn handle_show_command(
 ) -> Result<()> {
     let manager = crate::manager::Manager::new(config);
 
-    // Use PromptOperations trait for consistent behavior
     if let Some(prompt) = manager.find_prompt(&args.identifier)? {
         OutputStyle::print_prompt_detailed(&prompt);
     } else {

@@ -1,6 +1,5 @@
 use crate::cli::ExecArgs;
 use crate::config::Config;
-use crate::commands::handlers::InteractiveSelector;
 use crate::utils::{handle_not_found, handle_empty_list, print_cancelled, copy_to_clipboard, print_success};
 use anyhow::Result;
 
@@ -12,7 +11,7 @@ pub fn handle_exec_command(
 
     match &args.identifier {
         Some(identifier) => {
-            // Direct execution with ID or description using PromptOperations trait
+            // Direct execution with ID or description
             if let Some(prompt) = manager.find_prompt(identifier)? {
                 manager.execute_prompt(&prompt, args.copy)?;
             } else {
@@ -22,7 +21,7 @@ pub fn handle_exec_command(
             }
         }
         None => {
-            // Interactive mode - use trait-based selection
+            // Interactive mode
             handle_interactive_exec(config, args)?;
         }
     }
@@ -33,7 +32,7 @@ pub fn handle_exec_command(
 fn handle_interactive_exec(config: Config, _args: &ExecArgs) -> Result<()> {
     let manager = crate::manager::Manager::new(config.clone());
 
-    // Get all prompts for selection using PromptOperations trait
+    // Get all prompts for selection
     let prompts = manager.search_prompts(None, None)?;
 
     if prompts.is_empty() {
@@ -42,7 +41,7 @@ fn handle_interactive_exec(config: Config, _args: &ExecArgs) -> Result<()> {
     }
 
     // Use unified interactive selection
-    if let Some(prompt) = manager.select_interactive_prompts(prompts, &config)? {
+    if let Some(prompt) = manager.select_interactive_prompts(prompts)? {
         // For interactive mode: show only content and copy to clipboard
         let rendered_content = prompt.content.clone();
 

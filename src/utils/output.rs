@@ -2,6 +2,8 @@ use colored::*;
 use crate::models::Prompt;
 use crate::utils::format_datetime;
 use crate::config::Config;
+use crate::cli::ListFormat;
+use anyhow::Result;
 
 /// Display components for a prompt, used for consistent formatting
 pub struct PromptDisplay {
@@ -295,4 +297,167 @@ pub fn print_warning(message: &str) {
 
 pub fn print_success(message: &str) {
     println!("✅ {}", OutputStyle::success(message));
+}
+
+/// Display formatter for different output formats
+pub struct DisplayFormatter;
+
+impl DisplayFormatter {
+    /// Format prompts list according to the specified format
+    pub fn format_list(prompts: &[Prompt], format: &ListFormat, config: &Config) -> Result<()> {
+        if prompts.is_empty() {
+            crate::utils::handle_empty_list("prompts matching your criteria");
+            return Ok(());
+        }
+
+        match format {
+            ListFormat::Simple => Self::print_simple_list(prompts, config),
+            ListFormat::Detailed => Self::print_detailed_list(prompts),
+            ListFormat::Table => Self::print_table_list(prompts, config),
+            ListFormat::Json => Self::print_json_list(prompts)?,
+        }
+
+        Ok(())
+    }
+
+    /// Print tags list
+    pub fn print_tags(tags: &[String]) -> Result<()> {
+        if tags.is_empty() {
+            crate::utils::handle_empty_list("tags");
+            return Ok(());
+        }
+
+        println!("🏷️  Available Tags ({})", tags.len());
+        println!("====================");
+        for tag in tags {
+            println!("  {}", tag);
+        }
+
+        Ok(())
+    }
+
+    /// Print categories list
+    pub fn print_categories(categories: &[String]) -> Result<()> {
+        if categories.is_empty() {
+            crate::utils::handle_empty_list("categories");
+            return Ok(());
+        }
+
+        println!("📁 Available Categories ({})", categories.len());
+        println!("=========================");
+        for category in categories {
+            println!("  {}", category);
+        }
+
+        Ok(())
+    }
+
+    /// Print simple list format
+    fn print_simple_list(prompts: &[Prompt], config: &Config) {
+        crate::utils::print_prompt_count(prompts.len());
+        println!("{}", OutputStyle::separator());
+
+        for prompt in prompts {
+            let formatted_line = OutputStyle::format_prompt_line(prompt, config);
+            println!("{}", formatted_line);
+        }
+    }
+
+    /// Print detailed list format
+    fn print_detailed_list(prompts: &[Prompt]) {
+        OutputStyle::print_header("📝 Detailed Prompt List");
+
+        for (i, prompt) in prompts.iter().enumerate() {
+            println!("\n{}. {}", i + 1, OutputStyle::description(&prompt.description));
+            OutputStyle::print_prompt_list_preview(prompt);
+
+            if i < prompts.len() - 1 {
+                println!("{}", OutputStyle::separator());
+            }
+        }
+    }
+
+    /// Print table format
+    fn print_table_list(prompts: &[Prompt], _config: &Config) {
+        crate::utils::print_prompt_count(prompts.len());
+
+        // Calculate column widths
+        let mut max_title_width = 15; // Minimum width for "Description"
+        let mut max_tag_width = 10;    // Minimum width for "Tags"
+
+        for prompt in prompts {
+            max_title_width = max_title_width.max(prompt.description.len());
+            let tag_str = prompt.tag.iter().flatten().cloned().collect::<Vec<_>>().join(", ");
+            max_tag_width = max_tag_width.max(tag_str.len());
+        }
+
+        // Limit column widths to reasonable size
+        max_title_width = max_title_width.min(60);
+        max_tag_width = max_tag_width.min(25);
+
+        // Print header with colors
+        println!("┌─{}─┬─{}─┬─{}─┐",
+            "─".repeat(max_title_width),
+            "─".repeat(max_tag_width),
+            "─".repeat(19) // Date column
+        );
+        println!("│ {:<width_title$} │ {:<width_tags$} │ {:^19} │",
+            OutputStyle::header("Description"),
+            OutputStyle::header("Tags"),
+            OutputStyle::header("Updated"),
+            width_title = max_title_width,
+            width_tags = max_tag_width
+        );
+        println!("├─{}─┼─{}─┼─{}─┤",
+            "─".repeat(max_title_width),
+            "─".repeat(max_tag_width),
+            "─".repeat(19)
+        );
+
+        // Print rows with colors
+        for prompt in prompts {
+            let description = if prompt.description.len() > max_title_width {
+                format!("{}...", &prompt.description[..max_title_width.saturating_sub(3)])
+            } else {
+                prompt.description.clone()
+            };
+
+            let tag_str = if let Some(ref tags) = prompt.tag {
+                if tags.is_empty() {
+                    String::new()
+                } else {
+                    let tag_string = tags.join(", ");
+                    if tag_string.len() > max_tag_width {
+                        format!("{}...", &tag_string[..max_tag_width.saturating_sub(3)])
+                    } else {
+                        tag_string
+                    }
+                }
+            } else {
+                String::new()
+            };
+
+            println!("│ {:<width_title$} │ {:<width_tags$} │ {} │",
+                OutputStyle::description(&description),
+                OutputStyle::tags(&tag_str),
+                OutputStyle::muted(&crate::utils::format_datetime(&prompt.updated_at)),
+                width_title = max_title_width,
+                width_tags = max_tag_width
+            );
+        }
+
+        println!("└─{}─┴─{}─┴─{}─┘",
+            "─".repeat(max_title_width),
+            "─".repeat(max_tag_width),
+            "─".repeat(19)
+        );
+    }
+
+    /// Print JSON format
+    fn print_json_list(prompts: &[Prompt]) -> Result<()> {
+        let json = serde_json::to_string_pretty(prompts)
+            .map_err(|e| anyhow::anyhow!("Failed to serialize prompts to JSON: {}", e))?;
+        println!("{}", json);
+        Ok(())
+    }
 }

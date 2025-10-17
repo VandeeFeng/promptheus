@@ -1,7 +1,70 @@
 use anyhow::{Context, Result};
 use std::io::Write;
 use std::process::{Command, Stdio};
+use crate::models::{Prompt, PromptCollection};
+use crate::config::Config;
+use crate::utils::OutputStyle;
 
+
+/// Search engine for prompt filtering and operations
+pub struct SearchEngine;
+
+impl SearchEngine {
+    /// Search prompts with query and tag filtering
+    pub fn search(
+        collection: &PromptCollection,
+        query: Option<&str>,
+        tag: Option<&str>,
+        config: &Config,
+    ) -> Vec<Prompt> {
+        collection.search(query, tag, config)
+    }
+
+    /// Format prompts for selection with display strings
+    pub fn format_for_selection(
+        collection: &PromptCollection,
+        query: Option<&str>,
+        tag: Option<&str>,
+        category: Option<&str>,
+        config: &Config,
+    ) -> Vec<(Prompt, String)> {
+        let prompts = Self::search(collection, query, tag, config);
+
+        // Filter by category if specified
+        let filtered_prompts: Vec<_> = if let Some(category) = &category {
+            prompts.into_iter()
+                .filter(|p| p.category.as_deref() == Some(*category))
+                .collect()
+        } else {
+            prompts
+        };
+
+        let mut result = Vec::new();
+
+        for prompt in filtered_prompts {
+            let display_string = OutputStyle::format_prompt_for_selection(&prompt, config);
+            result.push((prompt, display_string));
+        }
+
+        result
+    }
+
+    /// Find prompt by parsing its display line
+    pub fn find_by_display_line(prompts: &[Prompt], selected_line: &str) -> Option<usize> {
+        // Extract description from format: [description]: content #tags [category]
+        if let Some(desc_end) = selected_line.find("]:") {
+            let description = &selected_line[1..desc_end]; // Remove [ and ]
+
+            for (i, prompt) in prompts.iter().enumerate() {
+                if prompt.description == description {
+                    return Some(i);
+                }
+            }
+        }
+
+        None
+    }
+}
 
 /// Interactively search using external tools like fzf or peco
 /// Returns the selected line content

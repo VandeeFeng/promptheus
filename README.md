@@ -28,10 +28,16 @@ Promptheus is a powerful prompt management system designed for developers, conte
 ### Installation
 
 ```bash
+# cargo install
+cargo install promptheus
+
 # Build from source
 git clone https://github.com/VandeeFeng/promptheus.git
 cd promptheus
-cargo build --release
+cargo build
+cargo run
+
+# Global install
 cargo install --path .
 
 ```

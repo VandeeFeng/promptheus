@@ -1,7 +1,6 @@
 use crate::cli::NewArgs;
 use crate::config::Config;
 use crate::models::Prompt;
-use crate::manager::Manager;
 use crate::utils::{self, print_sync_warning};
 use crate::utils::output::{OutputStyle, print_success};
 use anyhow::Result;
@@ -10,7 +9,7 @@ pub async fn handle_new_command(
     config: Config,
     args: &NewArgs,
 ) -> Result<()> {
-    let storage = Manager::new(config.clone());
+    let storage = crate::manager::Manager::new(config.clone());
 
     let description = match &args.description {
         Some(d) => d.clone(),
@@ -40,19 +39,15 @@ pub async fn handle_new_command(
             prompt.add_tag(tag);
         }
     } else {
-        // Allow adding custom tags with autocomplete
+        // Allow adding custom tags with autocomplete using PromptOperations trait
         let existing_tags = storage.get_all_tags()?;
         loop {
-            let custom_tag = if existing_tags.is_empty() {
-                utils::prompt_input(&format!("{}: ", OutputStyle::label("Tag")))?
-            } else {
-                match utils::prompt_input_with_autocomplete(&format!("{}: ", OutputStyle::label("Tag")), &existing_tags) {
-                    Some(tag) => tag,
-                    None => return Ok(()),
-                }
+            let custom_tag = match utils::prompt_input_with_autocomplete(&format!("{}: ", OutputStyle::label("Tag")), &existing_tags) {
+                Some(tag) => tag,
+                None => return Ok(()), // ESC to cancel
             };
             if custom_tag.is_empty() {
-                break;
+                break; // Empty input to finish adding tags
             }
             prompt.add_tag(custom_tag);
         }
@@ -67,7 +62,7 @@ pub async fn handle_new_command(
     if let Some(category) = &args.category {
         prompt.category = Some(category.clone());
     } else {
-        // Interactive category input with autocomplete
+        // Interactive category input with autocomplete using PromptOperations trait
         let existing_categories = storage.get_categories()?;
 
         let custom_category = match utils::prompt_input_with_autocomplete(&format!("{}: ", OutputStyle::label("Category")), &existing_categories) {

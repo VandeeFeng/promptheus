@@ -3,15 +3,15 @@ use std::fs;
 
 use crate::cli::EditArgs;
 use crate::config::Config;
-use crate::manager::Manager;
+use crate::commands::handlers::InteractiveSelector;
 use crate::utils::{self, print_sync_warning, handle_not_found};
 
 pub async fn handle_edit_command(
     config: Config,
     args: &EditArgs,
 ) -> Result<()> {
-    let storage = Manager::new(config.clone());
-    let prompts = storage.search_prompts(args.tag.as_deref(), args.category.as_deref())?;
+    let storage = crate::manager::Manager::new(config.clone());
+    let prompts = storage.search_prompts(None, args.tag.as_deref())?;
 
     let file_to_edit = config.general.prompt_file.clone();
     let line_number = if let Some(identifier) = args.identifier.as_ref().or(args.id.as_ref()) {
@@ -28,31 +28,17 @@ pub async fn handle_edit_command(
                 None
             }
     } else {
-        // Interactive selection
-        let display_strings: Vec<String> = prompts
-            .iter()
-            .map(|p| {
-                let tags = p.tag.as_deref().map(|t| format!(" #{}", t.join(" #"))).unwrap_or_default();
-                let category = p.category.as_deref().map(|c| format!(" [{}]", c)).unwrap_or_default();
-                format!("{}{}{}: {}", p.description, category, tags, p.content.lines().next().unwrap_or("").chars().take(50).collect::<String>())
-            })
-            .collect();
-
-        if let Some(selected_line) = utils::interactive_search_with_external_tool(&display_strings, &config.general.select_cmd, None)? {
-            let selected_index = display_strings.iter().position(|d| d == &selected_line);
-            if let Some(i) = selected_index {
-                match find_line_number_of_prompt(&file_to_edit, &prompts[i].description) {
-                    Ok(line_num) => Some(line_num),
-                    Err(_) => {
-                        handle_not_found("Prompt in TOML file", &prompts[i].description);
-                        return Ok(());
-                    }
+        // Interactive selection using unified trait interface
+        if let Some(selected_prompt) = storage.select_interactive_prompts(prompts, &config)? {
+            match find_line_number_of_prompt(&file_to_edit, &selected_prompt.description) {
+                Ok(line_num) => Some(line_num),
+                Err(_) => {
+                    handle_not_found("Prompt in TOML file", &selected_prompt.description);
+                    return Ok(());
                 }
-            } else {
-                None
             }
         } else {
-            None
+            return Ok(());
         }
     };
 

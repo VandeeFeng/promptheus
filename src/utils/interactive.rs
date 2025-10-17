@@ -266,13 +266,9 @@ fn prompt_multiline_internal(prompt: &str) -> Result<String, InteractiveError> {
         let event = event::read()?; // Propagate terminal errors properly
         match event {
             Event::Key(KeyEvent {
-                code: KeyCode::Char('j'),
-                modifiers: event::KeyModifiers::CONTROL,
-                ..
+                code: KeyCode::Char('j'), modifiers: event::KeyModifiers::CONTROL, ..
             }) | Event::Key(KeyEvent {
-                code: KeyCode::Enter,
-                modifiers: event::KeyModifiers::SHIFT,
-                ..
+                code: KeyCode::Enter, modifiers: event::KeyModifiers::SHIFT, ..
             }) => {
                 lines.push(current_line.clone());
                 current_line.clear();
@@ -349,77 +345,6 @@ pub fn prompt_yes_no(prompt: &str) -> Result<bool> {
     }
 }
 
-pub fn select_from_list(items: &[String]) -> Option<usize> {
-    if items.is_empty() {
-        return None;
-    }
-
-    let _guard = RawModeGuard::new().ok()?;
-    let mut stdout = io::stdout();
-
-    fn clear_screen(stdout: &mut std::io::Stdout) -> bool {
-        execute!(stdout, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0)).is_ok()
-    }
-
-    if !clear_screen(&mut stdout) {
-        return None;
-    }
-
-    let mut selected = 0;
-    loop {
-        // Clear screen and redraw
-        if !clear_screen(&mut stdout) {
-            return None;
-        }
-
-        println!("Use arrow keys to navigate, Enter to select, q to quit:");
-        println!();
-
-        for (i, item) in items.iter().enumerate() {
-            if i == selected {
-                if execute!(stdout, style::Print("> "), style::SetForegroundColor(style::Color::Blue)).is_err() {
-                    return None;
-                }
-            } else if execute!(stdout, style::Print("  ")).is_err() {
-                return None;
-            }
-            println!("{}", item);
-        }
-
-        let event = match event::read() {
-            Ok(e) => e,
-            Err(_) => return None, // Terminal errors are unrecoverable in this context
-        };
-
-        match event {
-            Event::Key(KeyEvent { code: KeyCode::Up, .. }) => {
-                selected = selected.saturating_sub(1);
-            }
-            Event::Key(KeyEvent { code: KeyCode::Down, .. }) => {
-                if selected < items.len() - 1 {
-                    selected += 1;
-                }
-            }
-            Event::Key(KeyEvent { code: KeyCode::Enter, .. }) => {
-                if !clear_screen(&mut stdout) {
-                    return Some(selected); // Still return selection even if cleanup fails
-                }
-                return Some(selected);
-            }
-            Event::Key(KeyEvent { code: KeyCode::Char('q'), .. }) => {
-                break;
-            }
-            Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
-                break;
-            }
-            _ => {}
-        }
-    }
-
-    // Clean up and return None for cancellation
-    let _ = clear_screen(&mut stdout);
-    None
-}
 
 
 pub fn open_editor_custom(

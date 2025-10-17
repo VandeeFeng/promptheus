@@ -175,7 +175,7 @@ impl Config {
         }
 
         let content = std::fs::read_to_string(config_path)
-            .with_context(|| format!("Failed to read config file: {:?}", config_path))?;
+            .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
 
         let config: Config = toml::from_str(&content)
             .with_context(|| "Failed to parse config file")?;
@@ -220,7 +220,9 @@ impl Config {
                 }
 
                 // Validate file name has proper extension
-                if !gist.file_name.ends_with(".toml") {
+                if !std::path::Path::new(&gist.file_name)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("toml")) {
                     return Err(anyhow::anyhow!(
                         "Gist file name should have .toml extension for proper prompt storage"
                     ));
@@ -236,14 +238,14 @@ impl Config {
 
         if let Some(parent) = config_path.parent() {
             std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create config directory: {:?}", parent))?;
+                .with_context(|| format!("Failed to create config directory: {}", parent.display()))?;
         }
 
         let content = toml::to_string_pretty(self)
             .with_context(|| "Failed to serialize config")?;
 
         std::fs::write(&config_path, content)
-            .with_context(|| format!("Failed to write config file: {:?}", config_path))?;
+            .with_context(|| format!("Failed to write config file: {}", config_path.display()))?;
 
         Ok(())
     }
@@ -259,7 +261,7 @@ impl Config {
         if !self.general.prompt_file.exists() {
             if let Some(parent) = self.general.prompt_file.parent() {
                 std::fs::create_dir_all(parent)
-                    .with_context(|| format!("Failed to create prompt directory: {:?}", parent))?;
+                    .with_context(|| format!("Failed to create prompt directory: {}", parent.display()))?;
             }
 
             let default_collection = crate::models::PromptCollection::default();
@@ -267,7 +269,7 @@ impl Config {
                 .with_context(|| "Failed to create default prompt collection")?;
 
             std::fs::write(&self.general.prompt_file, content)
-                .with_context(|| format!("Failed to create prompt file: {:?}", self.general.prompt_file))?;
+                .with_context(|| format!("Failed to create prompt file: {}", self.general.prompt_file.display()))?;
         }
 
         Ok(())

@@ -252,6 +252,28 @@ impl OutputStyle {
     pub fn print_clipboard_success() {
         println!("✓ {}", Self::success("Prompt copied to clipboard!"));
     }
+
+    /// Format a prompt for interactive selection (exec, edit modes)
+    /// Shows description, category, tags, and content preview
+    pub fn format_prompt_for_interactive_selection(prompt: &Prompt) -> String {
+        let tags = if let Some(ref tags) = prompt.tag {
+            if tags.is_empty() {
+                String::new()
+            } else {
+                format!(" #{}", tags.join(" #"))
+            }
+        } else {
+            String::new()
+        };
+
+        let category = if let Some(cat) = &prompt.category {
+            format!(" [{}]", cat)
+        } else {
+            String::new()
+        };
+
+        format!("{}{}{}: {}", prompt.description, category, tags, prompt.content)
+    }
 }
 
 // Utility functions for common patterns

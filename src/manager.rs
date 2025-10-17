@@ -1,5 +1,6 @@
 use crate::models::{Prompt, PromptCollection};
 use crate::config::Config;
+use crate::utils::OutputStyle;
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 
@@ -16,7 +17,7 @@ impl Manager {
         self.config.ensure_prompt_file_exists()?;
 
         let content = std::fs::read_to_string(&self.config.general.prompt_file)
-            .with_context(|| format!("Failed to read prompt file: {:?}", self.config.general.prompt_file))?;
+            .with_context(|| format!("Failed to read prompt file: {}", self.config.general.prompt_file.display()))?;
 
         // Handle empty or invalid TOML files
         if content.trim().is_empty() {
@@ -45,7 +46,7 @@ impl Manager {
             .with_context(|| "Failed to serialize prompt collection")?;
 
         std::fs::write(&self.config.general.prompt_file, content)
-            .with_context(|| format!("Failed to write prompt file: {:?}", self.config.general.prompt_file))?;
+            .with_context(|| format!("Failed to write prompt file: {}", self.config.general.prompt_file.display()))?;
 
         Ok(())
     }
@@ -178,11 +179,11 @@ impl Manager {
         Ok(collection.prompts)
     }
 
-    pub fn get_prompt_stats(&self) -> Result<PromptStats> {
+    pub fn get_prompt_stats(&self) -> Result<crate::commands::handlers::PromptStats> {
         let collection = self.load_prompts()?;
         let total_prompts = collection.prompts.len();
         let total_tags = collection.prompts.iter()
-            .map(|p| p.tag.iter().map(|tags| tags.len()).sum::<usize>())
+            .map(|p| p.tag.iter().len())
             .sum();
         let total_categories = collection.prompts.iter()
             .filter(|p| p.category.is_some())
@@ -203,7 +204,7 @@ impl Manager {
             }
         }
 
-        Ok(PromptStats {
+        Ok(crate::commands::handlers::PromptStats {
             total_prompts,
             total_tags,
             total_categories,
@@ -211,13 +212,72 @@ impl Manager {
             category_counts,
         })
     }
-}
 
-#[derive(Debug)]
-pub struct PromptStats {
-    pub total_prompts: usize,
-    pub total_tags: usize,
-    pub total_categories: usize,
-    pub tag_counts: HashMap<String, usize>,
-    pub category_counts: HashMap<String, usize>,
+    /// Format prompts for selection with display strings
+    pub fn search_and_format_for_selection(
+        &self,
+        query: Option<&str>,
+        tag: Option<&str>,
+        category: Option<&str>,
+    ) -> Result<Vec<(Prompt, String)>> {
+        let prompts = self.search_prompts(query, tag)?;
+
+        // Filter by category if specified
+        let filtered_prompts: Vec<_> = if let Some(category) = &category {
+            prompts.into_iter()
+                .filter(|p| p.category.as_deref() == Some(*category))
+                .collect()
+        } else {
+            prompts
+        };
+
+        let mut result = Vec::new();
+
+        for prompt in filtered_prompts {
+            let display_string = OutputStyle::format_prompt_for_selection(&prompt, &self.config);
+            result.push((prompt, display_string));
+        }
+
+        Ok(result)
+    }
+
+    /// Find prompt by parsing its display line
+    pub fn find_prompt_by_display_line(&self, prompts: &[Prompt], selected_line: &str) -> Result<Option<usize>> {
+        // Extract description from format: [description]: content #tags [category]
+        if let Some(desc_end) = selected_line.find("]:") {
+            let description = &selected_line[1..desc_end]; // Remove [ and ]
+
+            for (i, prompt) in prompts.iter().enumerate() {
+                if prompt.description == description {
+                    return Ok(Some(i));
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Execute prompt with variable substitution
+    pub fn execute_prompt(&self, prompt: &Prompt, copy_to_clipboard: bool) -> Result<()> {
+        use crate::utils::{parse_command_variables, prompt_for_variables, replace_command_variables, copy_to_clipboard as copy_fn};
+
+        let variables = parse_command_variables(&prompt.content);
+
+        let rendered_content = if variables.is_empty() {
+            prompt.content.clone()
+        } else {
+            OutputStyle::print_variables_list(&variables);
+            let user_values = prompt_for_variables(variables)?;
+            replace_command_variables(&prompt.content, &user_values)
+        };
+
+        if copy_to_clipboard {
+            copy_fn(&rendered_content)?;
+            OutputStyle::print_clipboard_success();
+        } else {
+            OutputStyle::print_rendered_content(&rendered_content);
+        }
+
+        Ok(())
+    }
 }

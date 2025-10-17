@@ -1,6 +1,6 @@
 use crate::cli::{ListArgs, ListFormat};
 use crate::config::Config;
-use crate::manager::Manager;
+use crate::models::PromptService;
 use anyhow::{Context, Result};
 
 use crate::utils::{OutputStyle, print_prompt_count, handle_empty_list};
@@ -9,7 +9,7 @@ pub fn handle_list_command(
     config: Config,
     args: &ListArgs,
 ) -> Result<()> {
-    let storage = Manager::new(config.clone());
+    let prompt_service = PromptService::new(config.clone());
 
     // Handle tags listing
     if args.tags {
@@ -22,44 +22,32 @@ pub fn handle_list_command(
     }
 
     if args.stats {
-        return show_stats(&storage);
+        return show_stats(&prompt_service);
     }
 
-    let prompts = storage.search_prompts(None, args.tag.as_deref())?;
+    let search_results = prompt_service.search_and_format_for_selection(None, args.tag.as_deref(), args.category.as_deref())?;
 
-    if prompts.is_empty() {
-        handle_empty_list("prompts");
-        return Ok(());
-    }
-
-    // Filter by category if specified
-    let filtered_prompts: Vec<_> = if let Some(category) = &args.category {
-        prompts.into_iter()
-            .filter(|p| p.category.as_ref() == Some(category))
-            .collect()
-    } else {
-        prompts
-    };
-
-    if filtered_prompts.is_empty() {
+    if search_results.is_empty() {
         handle_empty_list("prompts matching your criteria");
         return Ok(());
     }
 
+    let (prompts, _): (Vec<_>, Vec<_>) = search_results.into_iter().unzip();
+
     let format = args.format.as_ref().unwrap_or(&ListFormat::Simple);
 
     match format {
-        ListFormat::Simple => print_simple_list(&filtered_prompts, &config),
-        ListFormat::Detailed => print_detailed_list(&filtered_prompts),
-        ListFormat::Table => print_table_list(&filtered_prompts, &config),
-        ListFormat::Json => print_json_list(&filtered_prompts)?,
+        ListFormat::Simple => print_simple_list(&prompts, &config),
+        ListFormat::Detailed => print_detailed_list(&prompts),
+        ListFormat::Table => print_table_list(&prompts, &config),
+        ListFormat::Json => print_json_list(&prompts)?,
     }
 
     Ok(())
 }
 
-fn show_stats(storage: &Manager) -> Result<()> {
-    let stats = storage.get_prompt_stats()?;
+fn show_stats(prompt_service: &PromptService) -> Result<()> {
+    let stats = prompt_service.get_stats()?;
 
     OutputStyle::print_header("📊 Prompt Statistics");
 
@@ -95,39 +83,8 @@ fn print_simple_list(prompts: &[crate::models::Prompt], config: &Config) {
     println!("{}", OutputStyle::separator());
 
     for prompt in prompts {
-        let tags = if let Some(ref tags) = prompt.tag {
-            if tags.is_empty() {
-                String::new()
-            } else {
-                format!(" #{}", tags.join(" #"))
-            }
-        } else {
-            String::new()
-        };
-
-        let category = if let Some(cat) = &prompt.category {
-            format!(" [{}]", OutputStyle::tag(cat))
-        } else {
-            String::new()
-        };
-
-        // Show content preview if enabled, otherwise show full content
-        let content_display = if config.general.content_preview {
-            if prompt.content.len() > 100 {
-                format!("{}...", &prompt.content[..100])
-            } else {
-                prompt.content.clone()
-            }
-        } else {
-            prompt.content.clone()
-        };
-
-        println!("{}{}: {}{}",
-            OutputStyle::description(&prompt.description),
-            category,
-            tags,
-            OutputStyle::content(&content_display)
-        );
+        let formatted_line = OutputStyle::format_prompt_line(prompt, config);
+        println!("{}", formatted_line);
     }
 }
 
@@ -227,8 +184,8 @@ fn print_json_list(prompts: &[crate::models::Prompt]) -> Result<()> {
 }
 
 pub fn handle_tags_command(config: Config) -> Result<()> {
-    let storage = Manager::new(config);
-    let tags = storage.get_all_tags()?;
+    let prompt_service = PromptService::new(config);
+    let tags = prompt_service.get_all_tags()?;
 
     if tags.is_empty() {
         handle_empty_list("tags");
@@ -245,8 +202,8 @@ pub fn handle_tags_command(config: Config) -> Result<()> {
 }
 
 pub fn handle_categories_command(config: Config) -> Result<()> {
-    let storage = Manager::new(config);
-    let categories = storage.get_categories()?;
+    let prompt_service = PromptService::new(config);
+    let categories = prompt_service.get_categories()?;
 
     if categories.is_empty() {
         handle_empty_list("categories");

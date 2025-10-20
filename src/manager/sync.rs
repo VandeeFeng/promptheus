@@ -8,10 +8,10 @@ use std::io::{self, Write};
 
 use crate::cli::{SyncArgs, ExportArgs};
 use crate::config::Config;
-use crate::core::traits::{PromptStorage, PromptSearch};
+use crate::core::traits::PromptStorage;
 use crate::core::operations::PromptOperations;
 use crate::sync::{gist::GistClient, SyncClient, should_sync, SyncDirection};
-use crate::utils::{print_warning, print_network_error, generate_html, open_browser};
+use crate::utils::{print_warning, print_network_error, generate_html, open_browser, print_sync_warning};
 
 /// Check if an error is likely network-related and provide appropriate user feedback
 fn handle_potential_network_error(error: &anyhow::Error) -> Result<()> {
@@ -44,8 +44,15 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> 
 
     println!("🔄 Starting sync process...");
 
+    // Create sync client first to avoid moving config
+    let sync_client: Box<dyn SyncClient> = if let Some(gist_config) = &config.gist {
+        Box::new(GistClient::new(gist_config.clone())?)
+    } else {
+        return Err(anyhow!("No supported sync backend configured"));
+    };
+
     // Create storage instance
-    let storage = PromptOperations::new(config.clone());
+    let storage = PromptOperations::new(&config);
 
     // Load local prompts
     let local_prompts = storage.load_prompts()
@@ -57,13 +64,6 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> 
         .map(|p| p.updated_at)
         .max()
         .unwrap_or_else(Utc::now);
-
-    // Create sync client
-    let sync_client: Box<dyn SyncClient> = if let Some(gist_config) = &config.gist {
-        Box::new(GistClient::new(gist_config.clone())?)
-    } else {
-        return Err(anyhow!("No supported sync backend configured"));
-    };
 
     // Get remote snippet
     println!("📥 Fetching remote content...");
@@ -112,7 +112,7 @@ pub async fn handle_push_command(config: Config) -> Result<()> {
     println!("📤 Force uploading local prompts to remote...");
 
     // Create storage instance
-    let storage = PromptOperations::new(config.clone());
+    let storage = PromptOperations::new(&config);
 
     // Load local prompts
     let local_prompts = storage.load_prompts()
@@ -147,10 +147,9 @@ pub async fn handle_push_command(config: Config) -> Result<()> {
 
 // Export operations
 pub fn handle_export_command(config: Config, args: &ExportArgs) -> Result<()> {
-    let storage = PromptOperations::new(config.clone());
+    let storage = PromptOperations::new(&config);
 
-    let prompts = storage.search_prompts(None, None)
-        .context("Failed to load prompts")?;
+    let prompts = storage.get_all_prompts()?;
 
     if prompts.is_empty() {
         eprintln!("No prompts found to export");
@@ -165,13 +164,13 @@ pub fn handle_export_command(config: Config, args: &ExportArgs) -> Result<()> {
         if output.contains('/') || output.contains('\\') {
             output.clone()
         } else {
-            let config_dir = config.general.prompt_file.parent()
+            let config_dir = storage.config().general.prompt_file.parent()
                 .ok_or_else(|| anyhow::anyhow!("Cannot determine config directory"))?;
             config_dir.join(output).to_string_lossy().to_string()
         }
     } else {
         // Use config directory with default filename
-        let config_dir = config.general.prompt_file.parent()
+        let config_dir = storage.config().general.prompt_file.parent()
             .ok_or_else(|| anyhow::anyhow!("Cannot determine config directory"))?;
         config_dir.join(default_filename).to_string_lossy().to_string()
     };
@@ -325,7 +324,7 @@ pub async fn auto_sync_if_enabled(config: &Config) -> Result<()> {
     if should_sync {
         // Perform sync directly without going through handle_sync_command
         // to avoid re-comparing timestamps with prompts' updated_at
-        let storage = PromptOperations::new(config.clone());
+        let storage = PromptOperations::new(config);
 
         if local_modified > remote_snippet.updated_at {
             // Upload local changes
@@ -354,6 +353,13 @@ fn normalize_toml_content(content: &str) -> String {
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// Handle auto-sync after CRUD operations with error handling
+pub async fn handle_auto_sync_after_crud(config: &Config) {
+    if let Err(e) = auto_sync_if_enabled(config).await {
+        print_sync_warning(&e.to_string());
+    }
 }
 
 

@@ -14,7 +14,7 @@ pub fn handle_list_command(
     config: Config,
     args: &ListArgs,
 ) -> Result<()> {
-    let manager = PromptOperations::new(config.clone());
+    let manager = PromptOperations::new(&config);
 
     // Handle tags listing
     if args.tags {
@@ -50,7 +50,7 @@ pub fn handle_search_command(
     config: Config,
     args: &SearchArgs,
 ) -> Result<()> {
-    let manager = PromptOperations::new(config.clone());
+    let manager = PromptOperations::new(&config);
 
     let search_results = manager.search_and_format_for_selection(
         args.query.as_deref(),
@@ -68,7 +68,7 @@ pub fn handle_search_command(
     // Use unified interactive selection
     let selected_prompt = if let Some(selected_line) = utils::interactive_search_with_external_tool(
         &display_strings,
-        &config.general.select_cmd,
+        &manager.config().general.select_cmd,
         args.query.as_deref()
     )? {
         manager.find_prompt_by_display_line(&prompts, &selected_line).map(|index| &prompts[index])
@@ -94,11 +94,10 @@ pub fn handle_exec_command(
     config: Config,
     args: &ExecArgs,
 ) -> Result<()> {
-    let manager = PromptOperations::new(config.clone());
-
     match &args.identifier {
         Some(identifier) => {
             // Direct execution with ID or description
+            let manager = PromptOperations::new(&config);
             if let Some(prompt) = manager.find_prompt(identifier)? {
                 manager.execute_prompt(&prompt, args.copy)?;
             } else {
@@ -117,15 +116,10 @@ pub fn handle_exec_command(
 }
 
 fn handle_interactive_exec(config: Config, _args: &ExecArgs) -> Result<()> {
-    let manager = PromptOperations::new(config.clone());
+    let manager = PromptOperations::new(&config);
 
     // Get all prompts for selection
-    let prompts = manager.search_prompts(None, None)?;
-
-    if prompts.is_empty() {
-        handle_empty_list("prompts");
-        return Ok(());
-    }
+    let prompts = manager.get_all_prompts_or_return_empty()?;
 
     // Use unified interactive selection
     if let Some(prompt) = manager.select_interactive_prompts(prompts)? {

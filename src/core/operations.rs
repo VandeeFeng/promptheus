@@ -27,11 +27,15 @@ pub struct PromptOperations {
 
 impl PromptOperations {
     /// Create a new PromptOperations instance with the given configuration
-    pub fn new(config: Config) -> Self {
-        Self { config }
+    pub fn new(config: &Config) -> Self {
+        Self { config: config.clone() }
     }
 
-    
+    /// Get reference to the configuration
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
     /// Load prompts with proper error handling and ID generation
     fn load_prompts_with_ids(&self) -> Result<PromptCollection> {
         self.ensure_storage_exists()?;
@@ -85,6 +89,20 @@ impl PromptOperations {
         category: Option<&str>,
     ) -> Result<Vec<(Prompt, String)>> {
         self.format_for_selection(query, tag, category)
+    }
+
+    /// Get all prompts with convenience wrapper
+    pub fn get_all_prompts(&self) -> Result<Vec<Prompt>> {
+        self.search_prompts(None, None)
+    }
+
+    /// Get all prompts or return early if empty
+    pub fn get_all_prompts_or_return_empty(&self) -> Result<Vec<Prompt>> {
+        let prompts = self.get_all_prompts()?;
+        if prompts.is_empty() {
+            crate::utils::handle_empty_list("prompts");
+        }
+        Ok(prompts)
     }
 }
 
@@ -184,7 +202,6 @@ impl PromptDisplay for PromptOperations {
 
 // Implement PromptInteraction trait
 impl PromptInteraction for PromptOperations {
-    
     fn execute_prompt(&self, prompt: &Prompt, copy_to_clipboard: bool) -> Result<()> {
         use crate::utils::copy_to_clipboard as copy_fn;
 
@@ -242,7 +259,6 @@ impl PromptCrud for PromptOperations {
         self.save_prompts(&collection)
     }
 
-    
     fn delete_prompt(&self, id: &str) -> Result<()> {
         let mut collection = self.load_prompts_with_ids()?;
         collection.delete_prompt(id)

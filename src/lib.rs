@@ -30,7 +30,7 @@ impl Promptheus {
     /// Create a new Promptheus instance with the given configuration
     pub fn new(config: config::Config) -> Self {
         Self {
-            operations: PromptOperations::new(config),
+            operations: PromptOperations::new(&config),
         }
     }
 

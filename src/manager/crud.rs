@@ -9,14 +9,14 @@ use crate::config::Config;
 use crate::core::data::Prompt;
 use crate::core::traits::{PromptSearch, PromptInteraction, PromptCrud};
 use crate::core::operations::PromptOperations;
-use crate::utils::{self, print_sync_warning, handle_not_found, OutputStyle, print_cancelled, print_system_error, print_empty_result};
+use crate::utils::{self, handle_not_found, OutputStyle, print_cancelled, print_system_error};
 
 // Create operations
 pub async fn handle_new_command(
     config: Config,
     args: &NewArgs,
 ) -> Result<()> {
-    let storage = PromptOperations::new(config.clone());
+    let storage = PromptOperations::new(&config);
 
     let description = match &args.description {
         Some(d) => d.clone(),
@@ -29,7 +29,7 @@ pub async fn handle_new_command(
     let content = if let Some(content) = &args.content {
         content.clone()
     } else if args.editor {
-        utils::open_editor_custom(None, None, Some(&config.general.editor))?
+        utils::open_editor_custom(None, None, Some(&storage.config().general.editor))?
     } else {
         match utils::prompt_multiline(&format!("{}:", OutputStyle::label("Prompt content"))) {
             Some(content) => content,
@@ -60,7 +60,7 @@ pub async fn handle_new_command(
     }
 
     // Add default tags from config
-    for tag in &config.general.default_tags {
+    for tag in &storage.config().general.default_tags {
         prompt.add_tag(tag.clone());
     }
 
@@ -83,9 +83,7 @@ pub async fn handle_new_command(
     utils::output::print_success(&format!("Prompt '{}' saved successfully!", description));
 
     // Auto-sync if enabled
-    if let Err(e) = crate::manager::sync::auto_sync_if_enabled(&config).await {
-        print_sync_warning(&e.to_string());
-    }
+    crate::manager::sync::handle_auto_sync_after_crud(storage.config()).await;
 
     Ok(())
 }
@@ -95,7 +93,7 @@ pub fn handle_show_command(
     config: Config,
     args: &ShowArgs,
 ) -> Result<()> {
-    let manager = PromptOperations::new(config);
+    let manager = PromptOperations::new(&config);
 
     if let Some(prompt) = manager.find_prompt(&args.identifier)? {
         OutputStyle::print_prompt_detailed(&prompt);
@@ -111,10 +109,10 @@ pub async fn handle_edit_command(
     config: Config,
     args: &EditArgs,
 ) -> Result<()> {
-    let storage = PromptOperations::new(config.clone());
+    let storage = PromptOperations::new(&config);
     let prompts = storage.search_prompts(None, args.tag.as_deref())?;
 
-    let file_to_edit = config.general.prompt_file.clone();
+    let file_to_edit = storage.config().general.prompt_file.clone();
     let line_number = if let Some(identifier) = args.identifier.as_ref().or(args.id.as_ref()) {
         // Find by identifier
         if let Some(prompt) = prompts.iter().find(|p| p.id.as_ref() == Some(identifier) || p.description.to_lowercase().contains(&identifier.to_lowercase())) {
@@ -146,9 +144,7 @@ pub async fn handle_edit_command(
     utils::edit_file_direct(&file_to_edit, line_number.map(|l| l as u32), args.editor.as_deref())?;
 
     // Auto-sync if enabled
-    if let Err(e) = crate::manager::sync::auto_sync_if_enabled(&config).await {
-        print_sync_warning(&e.to_string());
-    }
+    crate::manager::sync::handle_auto_sync_after_crud(storage.config()).await;
 
     Ok(())
 }
@@ -179,19 +175,14 @@ pub fn handle_delete_command(
     config: Config,
     args: &DeleteArgs,
 ) -> Result<()> {
-    let manager = PromptOperations::new(config.clone());
+    let manager = PromptOperations::new(&config);
 
     // Find prompt by ID or description
     let prompt = if let Some(found) = manager.find_prompt(&args.identifier)? {
         found
     } else {
         // If not found, try interactive selection
-        let prompts = manager.search_prompts(None, None)?;
-
-        if prompts.is_empty() {
-            print_empty_result("prompts");
-            return Ok(());
-        }
+        let prompts = manager.get_all_prompts_or_return_empty()?;
 
         // Use interactive selection
         if let Some(selected_prompt) = manager.select_interactive_prompts(prompts)? {

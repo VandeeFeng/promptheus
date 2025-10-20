@@ -123,7 +123,7 @@ impl Drop for RawModeGuard {
     }
 }
 
-fn detect_editor(editor_cmd: Option<&str>) -> String {
+pub fn detect_editor(editor_cmd: Option<&str>) -> String {
     editor_cmd
         .map(|s| s.to_string())
         .or_else(|| std::env::var("EDITOR").ok())

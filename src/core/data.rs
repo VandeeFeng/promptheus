@@ -3,12 +3,12 @@
 //! This module contains the fundamental data structures used throughout
 //! the Promptheus application.
 
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 use std::collections::HashMap;
 use crate::config::{Config, SortBy};
-use crate::utils::time_format;
+use crate::utils::format;
 
 /// A single prompt with metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,14 +19,14 @@ pub struct Prompt {
     pub description: String,
     #[serde(rename = "Content")]
     pub content: String,
-    #[serde(rename = "Category", serialize_with = "serialize_category")]
+    #[serde(rename = "Category", serialize_with = "format::serialize_category")]
     pub category: Option<String>,
-    #[serde(rename = "Tag", serialize_with = "serialize_tag")]
+    #[serde(rename = "Tag", serialize_with = "format::serialize_tag")]
     pub tag: Option<Vec<String>>,
     #[serde(rename = "Output")]
     pub output: Option<String>,
     #[serde(rename = "Created_at")]
-    #[serde(with = "time_format")]
+    #[serde(with = "format")]
     pub created_at: DateTime<Utc>,
     #[serde(skip)]
     pub updated_at: DateTime<Utc>,
@@ -76,26 +76,6 @@ impl Prompt {
     }
 }
 
-/// Custom serialization functions to always include tag and category fields
-fn serialize_tag<S>(tag: &Option<Vec<String>>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match tag {
-        Some(tags) => serializer.serialize_some(tags),
-        None => serializer.serialize_some(&Vec::<String>::new()),
-    }
-}
-
-fn serialize_category<S>(category: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    match category {
-        Some(cat) => serializer.serialize_some(cat),
-        None => serializer.serialize_some(&String::new()),
-    }
-}
 
 impl PromptCollection {
     /// Create a new empty prompt collection

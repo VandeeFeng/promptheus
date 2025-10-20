@@ -5,7 +5,7 @@ pub mod interactive;
 pub mod output;
 pub mod search;
 pub mod stats;
-pub mod time_format;
+pub mod format;
 
 pub use error::*;
 pub use export::*;

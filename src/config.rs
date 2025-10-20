@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
+use crate::utils::interactive::detect_editor;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -31,37 +32,14 @@ pub struct GeneralConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GistConfig {
     pub file_name: String,
-    #[serde(default, serialize_with = "serialize_option_string", deserialize_with = "deserialize_option_string")]
+    #[serde(default, serialize_with = "crate::utils::format::serialize_option_string", deserialize_with = "crate::utils::format::deserialize_option_string")]
     pub access_token: Option<String>,
-    #[serde(default, serialize_with = "serialize_option_string", deserialize_with = "deserialize_option_string")]
+    #[serde(default, serialize_with = "crate::utils::format::serialize_option_string", deserialize_with = "crate::utils::format::deserialize_option_string")]
     pub gist_id: Option<String>,
     pub public: bool,
     pub auto_sync: bool,
 }
 
-/// Serialize Option<String> as empty string when None
-fn serialize_option_string<S>(option: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    match option {
-        Some(value) => serializer.serialize_str(value),
-        None => serializer.serialize_str(""),
-    }
-}
-
-/// Deserialize empty string as None
-fn deserialize_option_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    if s.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(s))
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitLabConfig {
@@ -93,20 +71,7 @@ impl Default for Config {
             general: GeneralConfig {
                 prompt_file: config_dir.join("prompts.toml"),
                 prompt_dirs: Vec::new(),
-                editor: std::env::var("EDITOR").unwrap_or_else(|_| {
-                    // Try to detect a good default editor
-                    if cfg!(windows) {
-                        "notepad".to_string()
-                    } else if std::path::Path::new("/usr/bin/code").exists() {
-                        "code".to_string()
-                    } else if std::path::Path::new("/usr/bin/vim").exists() {
-                        "vim".to_string()
-                    } else if std::path::Path::new("/usr/bin/nano").exists() {
-                        "nano".to_string()
-                    } else {
-                        "vi".to_string()
-                    }
-                }),
+                editor: detect_editor(None),
                 select_cmd: detect_best_select_command(),
                 default_tags: Vec::new(),
                 auto_sync: false,

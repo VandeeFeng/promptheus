@@ -1,6 +1,6 @@
 use colored::*;
 use crate::core::data::Prompt;
-use crate::utils::time_format::format_datetime;
+use crate::utils::format::format_datetime;
 use crate::config::Config;
 use crate::cli::ListFormat;
 use anyhow::Result;

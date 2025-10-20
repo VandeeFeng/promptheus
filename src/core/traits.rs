@@ -84,7 +84,6 @@ pub trait PromptCrud: PromptStorage + PromptSearch {
     /// Add a new prompt
     fn add_prompt(&self, prompt: Prompt) -> Result<()>;
 
-    
     /// Delete a prompt by ID
     fn delete_prompt(&self, id: &str) -> Result<()>;
 }

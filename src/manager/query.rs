@@ -78,14 +78,10 @@ pub fn handle_search_command(
     };
 
     if let Some(prompt) = selected_prompt {
-        if args.execute {
-            manager.execute_prompt(prompt, args.copy)?;
-        } else {
-            use crate::utils::OutputStyle;
+        use crate::utils::OutputStyle;
 
-            // Display complete prompt with all logic handled internally
-            OutputStyle::display_prompt_complete(prompt)?;
-        }
+        // Display complete prompt with all logic handled internally
+        OutputStyle::display_prompt_complete(prompt)?;
     }
 
     Ok(())
@@ -101,7 +97,8 @@ pub fn handle_exec_command(
             // Direct execution with ID or description
             let manager = PromptOperations::new(&config);
             if let Some(prompt) = manager.find_prompt(identifier)? {
-                manager.execute_prompt(&prompt, args.copy)?;
+                // Always copy to clipboard for direct execution
+                manager.execute_prompt(&prompt, true)?;
             } else {
                 // Handle not found as notification, not error
                 handle_not_found("Prompt with ID or description", identifier);

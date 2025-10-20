@@ -16,7 +16,14 @@ Promptheus is a powerful prompt management system designed for developers, conte
 - 📁 **Category Management**: Organize prompts by categories
 - 🔄 **Cloud Sync**: GitHub Gist synchronization support
 - 🎯 **Interactive Interface**: Intuitive command-line interaction
+- 📄 **Smart Content Preview**: Long prompts show truncated preview first, then offer full viewing in pager
 - ⚡ **Quick Execution**: One-click copy or output of prompt content
+
+### Smart Content Handling
+
+One of Promptheus's standout features is its intelligent approach to long content. When displaying lengthy prompts, the system first shows a truncated preview (beginning and end), then asks if you'd like to view the complete content in a pager.
+
+This feature works across all commands that display prompt content, including `search`, `exec`, and `show`.
 
 ## Installation and Usage
 
@@ -58,205 +65,46 @@ Configuration file location:
 - Linux/macOS: `~/.config/promptheus/config.toml`
 - Windows: `%APPDATA%\promptheus\config.toml`
 
-## Command Line Interface
+## Quick Start
 
-### Basic Commands
+### Core Commands
 
-#### `new` - Create new prompt
 ```bash
-# Interactive creation
+# Create a new prompt
 promptheus new
 
-# Create with parameters
-promptheus new -T "Title" -d "Description" -t "tag" -c "category"
+# Search prompts interactively
+promptheus search
 
-# Create using editor
-promptheus new --editor
+# Execute a prompt (copies to clipboard)
+promptheus exec
 
-# Create with direct content
-promptheus new --content "prompt content"
-```
-
-#### `list` - List prompts
-```bash
 # List all prompts
 promptheus list
 
-# Filter by tag
-promptheus list -t "tag_name"
-
-# Filter by category
-promptheus list -c "category_name"
-
-# Show detailed information
-promptheus list --format detailed
-
-# Table format display
-promptheus list --format table
-
-# JSON format output
-promptheus list --format json
-
-# Show statistics
-promptheus list --stats
-```
-
-#### `search` - Search prompts
-```bash
-# Interactive search
-promptheus search
-
-# Search by keyword
-promptheus search -q "keyword"
-
-# Search by tag
-promptheus search -t "tag_name"
-
-# Search by category
-promptheus search -c "category_name"
-
-# Search and execute
-promptheus search --execute
-
-# Search and copy to clipboard
-promptheus search --copy
-```
-
-#### `exec` - Execute prompt
-```bash
-# Copy to clipboard
-promptheus exec "prompt_id_or_title"
-
-# Output to console
-promptheus exec "prompt_id_or_title" --output
-
-# Use variable substitution
-promptheus exec "prompt_id_or_title" --vars "var1=value1" "var2=value2"
-```
-
-### Edit Commands
-
-#### `edit` - Edit prompt
-```bash
-# Interactive selection and edit
-promptheus edit
-
-# Edit specific prompt
-promptheus edit "prompt_id_or_title"
-
-# Filter by tag then edit
-promptheus edit -t "tag_name"
-
-# Filter by category then edit
-promptheus edit -c "category_name"
-
-```
-
-#### `show` - Show prompt details
-```bash
 # Show prompt details
-promptheus show "prompt_id_or_title"
+promptheus show "prompt_name"
 
-# Show with variable substitution
-promptheus show "prompt_id_or_title" --vars "var1=value1"
+# Edit a prompt
+promptheus edit
 ```
 
-#### `delete` - Delete prompt
+### Sync Prompts
+
 ```bash
-# Delete prompt (with confirmation)
-promptheus delete "prompt_id_or_title"
-
-# Force delete (no confirmation)
-promptheus delete "prompt_id_or_title" --force
-```
-
-### Organization Commands
-
-#### `tags` - Manage tags
-```bash
-# Show all tags
-promptheus tags
-```
-
-#### `categories` - Manage categories
-```bash
-# Show all categories
-promptheus categories
-```
-
-### Configuration Commands
-
-#### `config` - Configuration management
-```bash
-# Show current configuration
-promptheus config show
-
-# Open configuration file in editor
-promptheus config open
-
-# Reset configuration to defaults
-promptheus config reset
-```
-
-### Sync Commands
-
-#### `sync` - Synchronize prompts
-```bash
-# Two-way synchronization
+# Two-way sync with cloud (GitHub Gist)
 promptheus sync
 
-# Upload only
+# Upload local changes to remote
 promptheus sync --upload
 
-# Download only
+# Download changes from remote
 promptheus sync --download
-
-# Force sync (overwrite conflicts)
-promptheus sync --force
 ```
 
-#### `push` - Force push
-```bash
-# Force upload local prompts to remote
-promptheus push
-```
+> 💡 **Tip**: Use `promptheus --help` to see all available commands and options.
 
-### Global Options
-
-```bash
-# Specify configuration file
-promptheus --config /path/to/config.toml <command>
-
-# Enable debug mode
-promptheus --debug <command>
-```
-
-## Usage Examples
-
-### Workflow Examples
-
-1. **Create a prompt**
-   ```bash
-   promptheus new -T "Code Review" -d "Prompt for code review" -t "programming" -c "work"
-   ```
-
-2. **Search and execute**
-   ```bash
-   promptheus search -q "code review" --execute
-   ```
-
-3. **Manage tags**
-   ```bash
-   promptheus tags  # View all tags
-   promptheus list -t "programming"  # View programming-related prompts
-   ```
-
-4. **Sync to cloud**
-   ```bash
-   promptheus sync --upload  # Upload to GitHub Gist
-   ```
-
-### Configuration Example
+## Configuration Example
 
 Example `config.toml`:
 

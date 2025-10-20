@@ -298,7 +298,11 @@ impl OutputStyle {
         let (_, terminal_height) = get_terminal_size().unwrap_or((24, 80));
 
         if should_paginate(content, terminal_height) {
-            // Ask user if they want to preview the full content in pager
+            // First, show title and truncated content
+            println!("\n{}:", Self::title(title));
+            Self::print_content_truncated(content);
+
+            // Then ask user if they want to view the full content in pager
             print!("\n{} View {} in pager? (y/N): ", Self::info("?"), title);
             io::stdout().flush().unwrap();
 
@@ -311,10 +315,6 @@ impl OutputStyle {
                                               content
                 );
                 paginate_static_content(&content_display)?;
-            } else {
-                // Show brief preview without pagination
-                println!("\n{}:", Self::title(title));
-                Self::print_content_truncated(content);
             }
         } else {
             // Show full content for short content

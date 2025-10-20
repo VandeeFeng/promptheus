@@ -77,10 +77,10 @@ pub enum Commands {
     /// List all prompts
     List(ListArgs),
 
-    /// Search prompts interactively
+    /// Search and display prompts
     Search(SearchArgs),
 
-    /// Execute a prompt (copy to clipboard or output)
+    /// Execute a prompt (copy to clipboard)
     Exec(ExecArgs),
 
     /// Delete a prompt
@@ -182,21 +182,12 @@ pub struct SearchArgs {
 
     #[arg(short = 'q', long)]
     pub query: Option<String>,
-
-    #[arg(long)]
-    pub execute: bool,
-
-    #[arg(long)]
-    pub copy: bool,
 }
 
 #[derive(Args)]
 pub struct ExecArgs {
     #[arg(help = "Prompt ID or description")]
     pub identifier: Option<String>,
-
-    #[arg(long)]
-    pub copy: bool,
 
     #[arg(long)]
     pub output: bool,

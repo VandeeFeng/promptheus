@@ -284,11 +284,6 @@ impl OutputStyle {
         }
     }
 
-    /// Print success message for clipboard operation
-    pub fn print_clipboard_success() {
-        println!("✓ {}", Self::success("Prompt copied to clipboard!"));
-    }
-
     /// Ask user about pagination and display content accordingly
     pub fn ask_and_display_content(content: &str, title: &str) -> Result<()> {
         use std::io::{self, Write};

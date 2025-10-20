@@ -217,7 +217,9 @@ impl PromptInteraction for PromptOperations {
 
         if copy_to_clipboard {
             copy_fn(&rendered_content)?;
-            crate::utils::output::OutputStyle::print_clipboard_success();
+            crate::utils::print_success("Prompt copied to clipboard!");
+            // Also show content with pagination after copying
+            crate::utils::output::OutputStyle::ask_and_display_content(&rendered_content, "📄 Content")?;
         } else {
             // Show content with pagination if needed
             crate::utils::output::OutputStyle::ask_and_display_content(&rendered_content, "📄 Content")?;

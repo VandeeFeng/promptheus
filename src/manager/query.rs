@@ -97,7 +97,7 @@ pub fn handle_exec_command(
             // Direct execution with ID or description
             let manager = PromptOperations::new(&config);
             if let Some(prompt) = manager.find_prompt(identifier)? {
-                // Always copy to clipboard for direct execution
+                // Execute prompt (copy to clipboard and show content)
                 manager.execute_prompt(&prompt, true)?;
             } else {
                 // Handle not found as notification, not error

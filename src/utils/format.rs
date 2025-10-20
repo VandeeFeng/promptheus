@@ -73,3 +73,36 @@ where
 pub fn format_datetime(dt: &DateTime<Utc>) -> String {
     dt.format(FORMAT).to_string()
 }
+
+/// Format tags as comma-separated string
+pub fn format_tags_comma(tags: &Option<Vec<String>>) -> String {
+    match tags {
+        Some(t) if !t.is_empty() => t.join(", "),
+        _ => String::new(),
+    }
+}
+
+/// Format tags as string with # prefix
+pub fn format_tags_hash(tags: &Option<Vec<String>>) -> String {
+    match tags {
+        Some(t) if !t.is_empty() => format!(" #{}", t.join(" #")),
+        _ => String::new(),
+    }
+}
+
+/// Format category, return (display_value, is_empty)
+pub fn format_category_info(category: &Option<String>) -> (String, bool) {
+    match category {
+        Some(cat) if !cat.trim().is_empty() => (cat.clone(), false),
+        _ => (String::new(), true),
+    }
+}
+
+/// Simple string truncation function
+pub fn truncate_string(text: &str, max_len: usize) -> String {
+    if text.len() > max_len {
+        format!("{}...", &text[..max_len.saturating_sub(3)])
+    } else {
+        text.to_string()
+    }
+}

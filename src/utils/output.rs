@@ -1,6 +1,6 @@
 use colored::*;
 use crate::core::data::Prompt;
-use crate::utils::format::format_datetime;
+use crate::utils::format::{format_datetime, format_tags_comma, format_tags_hash, format_category_info, truncate_string};
 use crate::config::Config;
 use crate::cli::ListFormat;
 use anyhow::Result;
@@ -11,6 +11,16 @@ pub struct PromptDisplay {
     pub content_preview: String,
     pub tags_formatted: String,
     pub category_formatted: String,
+}
+
+/// Prompt field types for unified display
+enum PromptField {
+    Id,
+    Description,
+    Category,
+    Tags,
+    Created,
+    Updated,
 }
 
 pub struct OutputStyle;
@@ -87,6 +97,39 @@ impl OutputStyle {
         println!("{:>12}: {}", Self::label(label), color_fn(value));
     }
 
+    /// Unified prompt field printing function
+    fn print_prompt_field(field: PromptField, prompt: &Prompt) {
+        match field {
+            PromptField::Id => {
+                if let Some(id) = &prompt.id {
+                    Self::print_field_colored("ID", id, Self::muted);
+                }
+            }
+            PromptField::Description =>
+                Self::print_field_colored("Description", &prompt.description, Self::content),
+            PromptField::Category => {
+                let (cat_str, is_empty) = format_category_info(&prompt.category);
+                if is_empty {
+                    Self::print_field_colored("Category", "", Self::content);
+                } else {
+                    Self::print_field_colored("Category", &cat_str, Self::content);
+                }
+            }
+            PromptField::Tags => {
+                let tags_str = format_tags_comma(&prompt.tag);
+                if tags_str.is_empty() {
+                    Self::print_field_colored("Tags", "", Self::command);
+                } else {
+                    Self::print_field_colored("Tags", &tags_str, Self::command);
+                }
+            }
+            PromptField::Created =>
+                Self::print_field_colored("Created", &format_datetime(&prompt.created_at), Self::muted),
+            PromptField::Updated =>
+                Self::print_field_colored("Updated", &format_datetime(&prompt.updated_at), Self::muted),
+        }
+    }
+
     // Unified prompt display functions
     pub fn print_prompt_basic(prompt: &Prompt) {
         println!("  Description: {}", Self::description(&prompt.description));
@@ -97,31 +140,11 @@ impl OutputStyle {
     pub fn print_prompt_detailed(prompt: &Prompt) {
         println!("{}", Self::title("📝 Prompt Details"));
 
-        if let Some(id) = &prompt.id {
-            Self::print_field_colored("ID", id, Self::muted);
-        }
-        Self::print_field_colored("Description", &prompt.description, Self::content);
-
-        match &prompt.category {
-            Some(category) if !category.trim().is_empty() => {
-                Self::print_field_colored("Category", category, Self::content);
-            }
-            _ => {
-                Self::print_field_colored("Category", "", Self::content);
-            }
-        }
-
-        if let Some(ref tags) = prompt.tag {
-            if tags.is_empty() {
-                Self::print_field_colored("Tags", "", Self::command);
-            } else {
-                Self::print_field_colored("Tags", &tags.join(", "), Self::command);
-            }
-        } else {
-            Self::print_field_colored("Tags", "", Self::command);
-        }
-
-        Self::print_field_colored("Created", &format_datetime(&prompt.created_at), Self::muted);
+        Self::print_prompt_field(PromptField::Id, prompt);
+        Self::print_prompt_field(PromptField::Description, prompt);
+        Self::print_prompt_field(PromptField::Category, prompt);
+        Self::print_prompt_field(PromptField::Tags, prompt);
+        Self::print_prompt_field(PromptField::Created, prompt);
 
         println!("\n{}:", Self::title("📄 Content"));
         println!("{}", Self::content(&prompt.content));
@@ -129,20 +152,22 @@ impl OutputStyle {
 
     pub fn print_prompt_list_preview(prompt: &Prompt) {
         Self::print_field_colored("Description", &prompt.description, Self::description);
-        if let Some(id) = &prompt.id {
-            Self::print_field_colored("ID", id, Self::muted);
+        Self::print_prompt_field(PromptField::Id, prompt);
+
+        // Category with tag color
+        let (cat_str, _) = format_category_info(&prompt.category);
+        if !cat_str.is_empty() {
+            Self::print_field_colored("Category", &cat_str, Self::tag);
         }
 
-        if let Some(category) = &prompt.category {
-            Self::print_field_colored("Category", category, Self::tag);
+        // Tags with tags color
+        let tags_str = format_tags_comma(&prompt.tag);
+        if !tags_str.is_empty() {
+            Self::print_field_colored("Tags", &tags_str, Self::tags);
         }
 
-        if let Some(ref tags) = prompt.tag && !tags.is_empty() {
-            Self::print_field_colored("Tags", &tags.join(", "), Self::tags);
-        }
-
-        Self::print_field_colored("Created", &format_datetime(&prompt.created_at), Self::muted);
-        Self::print_field_colored("Updated", &format_datetime(&prompt.updated_at), Self::muted);
+        Self::print_prompt_field(PromptField::Created, prompt);
+        Self::print_prompt_field(PromptField::Updated, prompt);
 
         // Show preview of content
         let lines: Vec<&str> = prompt.content.lines().take(3).collect();
@@ -159,15 +184,7 @@ impl OutputStyle {
 
     /// Build display components for a prompt
     pub fn build_prompt_display(prompt: &Prompt, config: &Config) -> PromptDisplay {
-        let tags_formatted = if let Some(ref tags) = prompt.tag {
-            if tags.is_empty() {
-                String::new()
-            } else {
-                format!(" #{}", tags.join(" #"))
-            }
-        } else {
-            String::new()
-        };
+        let tags_formatted = format_tags_hash(&prompt.tag);
 
         let category_formatted = if let Some(cat) = &prompt.category {
             format!(" [{}]", cat)
@@ -176,11 +193,7 @@ impl OutputStyle {
         };
 
         let content_preview = if config.general.content_preview {
-            if prompt.content.len() > 100 {
-                format!("{}...", &prompt.content[..100])
-            } else {
-                prompt.content.clone()
-            }
+            truncate_string(&prompt.content, 100)
         } else {
             String::new()
         };
@@ -404,26 +417,9 @@ impl DisplayFormatter {
 
         // Print rows with colors
         for prompt in prompts {
-            let description = if prompt.description.len() > max_title_width {
-                format!("{}...", &prompt.description[..max_title_width.saturating_sub(3)])
-            } else {
-                prompt.description.clone()
-            };
-
-            let tag_str = if let Some(ref tags) = prompt.tag {
-                if tags.is_empty() {
-                    String::new()
-                } else {
-                    let tag_string = tags.join(", ");
-                    if tag_string.len() > max_tag_width {
-                        format!("{}...", &tag_string[..max_tag_width.saturating_sub(3)])
-                    } else {
-                        tag_string
-                    }
-                }
-            } else {
-                String::new()
-            };
+            let description = truncate_string(&prompt.description, max_title_width);
+            let tag_str = format_tags_comma(&prompt.tag);
+            let tag_str = truncate_string(&tag_str, max_tag_width);
 
             println!("│ {:<width_title$} │ {:<width_tags$} │ {} │",
                 OutputStyle::description(&description),

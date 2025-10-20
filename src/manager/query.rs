@@ -142,12 +142,12 @@ fn handle_interactive_exec(config: Config, _args: &ExecArgs) -> Result<()> {
     if let Some(prompt) = selected_prompt {
         let rendered_content = prompt.content.clone();
 
-        // Show content with pagination if needed
-        OutputStyle::ask_and_display_content(&rendered_content, "📄 Content")?;
-
-        // Always copy to clipboard in interactive mode
+        // Always copy to clipboard in interactive mode (before showing content to avoid minus pager issues)
         copy_to_clipboard(&rendered_content)?;
         print_success("Prompt copied to clipboard!");
+
+        // Show content with pagination if needed
+        OutputStyle::ask_and_display_content(&rendered_content, "📄 Content")?;
     }
 
     Ok(())

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
-use crate::utils::interactive::detect_editor;
+use crate::utils::console::detect_editor;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {

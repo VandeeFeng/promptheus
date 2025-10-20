@@ -1,7 +1,6 @@
-pub mod command;
 pub mod error;
 pub mod export;
-pub mod interactive;
+pub mod console;
 pub mod output;
 pub mod search;
 pub mod stats;
@@ -9,6 +8,6 @@ pub mod format;
 
 pub use error::*;
 pub use export::*;
-pub use interactive::*;
+pub use console::*;
 pub use output::*;
 pub use search::*;

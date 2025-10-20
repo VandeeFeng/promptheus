@@ -14,7 +14,7 @@ use crate::utils::{
     search::{SearchEngine, interactive_search_with_external_tool},
     stats::StatsCalculator,
     output::DisplayFormatter,
-    command::{parse_command_variables, prompt_for_variables, replace_command_variables},
+    console::{parse_command_variables, prompt_for_variables, replace_command_variables},
 };
 
 /// Main operations hub that implements all core traits

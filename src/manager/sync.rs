@@ -1,11 +1,17 @@
-use crate::cli::SyncArgs;
-use crate::config::Config;
-use crate::manager::Manager;
-use crate::sync::{gist::GistClient, SyncClient, should_sync, SyncDirection};
-use crate::utils::{print_warning, print_network_error};
+// Sync operations - Sync, Push, Export
+// Consolidated from sync.rs, push.rs, export.rs
+
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
+use std::fs;
 use std::io::{self, Write};
+
+use crate::cli::{SyncArgs, ExportArgs};
+use crate::config::Config;
+use crate::core::traits::{PromptStorage, PromptSearch};
+use crate::core::operations::PromptOperations;
+use crate::sync::{gist::GistClient, SyncClient, should_sync, SyncDirection};
+use crate::utils::{print_warning, print_network_error, generate_html, open_browser};
 
 /// Check if an error is likely network-related and provide appropriate user feedback
 fn handle_potential_network_error(error: &anyhow::Error) -> Result<()> {
@@ -13,23 +19,24 @@ fn handle_potential_network_error(error: &anyhow::Error) -> Result<()> {
 
     // Check for common network-related error indicators
     if error_msg.contains("network") ||
-       error_msg.contains("connection") ||
-       error_msg.contains("timeout") ||
-       error_msg.contains("dns") ||
-       error_msg.contains("unreachable") ||
-       error_msg.contains("refused") ||
-       error_msg.contains("host") ||
-       error_msg.contains("ssl") ||
-       error_msg.contains("certificate") ||
-       error_msg.contains("tcp") ||
-       error_msg.contains("http") {
-        print_network_error(&format!("Request failed: {}. Please check your internet connection and try again.", error));
-    }
+        error_msg.contains("connection") ||
+        error_msg.contains("timeout") ||
+        error_msg.contains("dns") ||
+        error_msg.contains("unreachable") ||
+        error_msg.contains("refused") ||
+        error_msg.contains("host") ||
+        error_msg.contains("ssl") ||
+        error_msg.contains("certificate") ||
+        error_msg.contains("tcp") ||
+        error_msg.contains("http") {
+            print_network_error(&format!("Request failed: {}. Please check your internet connection and try again.", error));
+        }
 
     // Still return the original error so the calling code can handle it
     Err(anyhow::Error::msg(error.to_string()))
 }
 
+// Sync operations
 pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> {
     // Check if any sync backend is configured
     let _gist_config = config.gist.as_ref()
@@ -38,7 +45,7 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> 
     println!("🔄 Starting sync process...");
 
     // Create storage instance
-    let storage = Manager::new(config.clone());
+    let storage = PromptOperations::new(config.clone());
 
     // Load local prompts
     let local_prompts = storage.load_prompts()
@@ -95,10 +102,98 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> Result<()> 
     Ok(())
 }
 
+// Push operations (force upload)
+pub async fn handle_push_command(config: Config) -> Result<()> {
+    // Check if sync backend is configured
+    let gist_config = config.gist.as_ref()
+        .ok_or_else(|| anyhow::Error::msg("No sync backend configured. Please configure Gist in your config."))?;
+
+    println!("🚀 Starting push process...");
+    println!("📤 Force uploading local prompts to remote...");
+
+    // Create storage instance
+    let storage = PromptOperations::new(config.clone());
+
+    // Load local prompts
+    let local_prompts = storage.load_prompts()
+        .context("Failed to load local prompts")?;
+
+    if local_prompts.prompts.is_empty() {
+        print_warning("No prompts found locally. Nothing to push.");
+        return Ok(());
+    }
+
+    println!("📋 Found {} local prompt(s)", local_prompts.prompts.len());
+
+    // Create sync client
+    let sync_client = GistClient::new(gist_config.clone())
+        .context("Failed to create Gist client")
+        .map_err(|e| handle_potential_network_error(&e).unwrap_err())?;
+
+    // Serialize local prompts to TOML
+    let content = toml::to_string_pretty(&local_prompts)
+        .context("Failed to serialize local prompts")?;
+
+    // Upload to remote
+    sync_client.upload(content).await
+        .context("Failed to upload to remote")
+        .map_err(|e| handle_potential_network_error(&e).unwrap_err())?;
+
+    println!("✅ Successfully pushed {} prompt(s) to remote", local_prompts.prompts.len());
+    println!("🎉 Push completed successfully!");
+
+    Ok(())
+}
+
+// Export operations
+pub fn handle_export_command(config: Config, args: &ExportArgs) -> Result<()> {
+    let storage = PromptOperations::new(config.clone());
+
+    let prompts = storage.search_prompts(None, None)
+        .context("Failed to load prompts")?;
+
+    if prompts.is_empty() {
+        eprintln!("No prompts found to export");
+        return Ok(());
+    }
+
+    let html_content = generate_html(&prompts)?;
+
+    // Determine output file path - default to same directory as prompts.toml
+    let default_filename = "prompts.html";
+    let output_path = if let Some(output) = &args.output {
+        if output.contains('/') || output.contains('\\') {
+            output.clone()
+        } else {
+            let config_dir = config.general.prompt_file.parent()
+                .ok_or_else(|| anyhow::anyhow!("Cannot determine config directory"))?;
+            config_dir.join(output).to_string_lossy().to_string()
+        }
+    } else {
+        // Use config directory with default filename
+        let config_dir = config.general.prompt_file.parent()
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine config directory"))?;
+        config_dir.join(default_filename).to_string_lossy().to_string()
+    };
+
+    // Write HTML file
+    fs::write(&output_path, html_content)
+        .with_context(|| format!("Failed to write HTML file: {}", output_path))?;
+
+    println!("✅ Exported {} prompts to {}", prompts.len(), output_path);
+
+    if args.open {
+        open_browser(&output_path)?;
+    }
+
+    Ok(())
+}
+
+// Helper functions
 async fn upload_to_remote(
-    _storage: &Manager,
+    _storage: &PromptOperations,
     sync_client: &dyn SyncClient,
-    local_prompts: &crate::models::PromptCollection,
+    local_prompts: &crate::core::data::PromptCollection,
 ) -> Result<()> {
     print!("📤 Uploading local changes to remote... ");
     io::stdout().flush()?;
@@ -117,14 +212,14 @@ async fn upload_to_remote(
 }
 
 async fn download_from_remote(
-    storage: &Manager,
+    storage: &PromptOperations,
     remote_snippet: &crate::sync::RemoteSnippet,
 ) -> Result<()> {
     print!("📥 Downloading remote changes... ");
     io::stdout().flush()?;
 
     // Parse remote content
-    let remote_prompts: crate::models::PromptCollection = toml::from_str(&remote_snippet.content)
+    let remote_prompts: crate::core::data::PromptCollection = toml::from_str(&remote_snippet.content)
         .context("Failed to parse remote content")?;
 
     // Save remote prompts locally
@@ -195,7 +290,7 @@ pub async fn auto_sync_if_enabled(config: &Config) -> Result<()> {
                 .context("Failed to read local file")?;
 
             // Try to parse remote content and compare
-            match toml::from_str::<crate::models::PromptCollection>(&remote_snippet.content) {
+            match toml::from_str::<crate::core::data::PromptCollection>(&remote_snippet.content) {
                 Ok(remote_prompts) => {
                     match toml::to_string_pretty(&remote_prompts) {
                         Ok(remote_formatted) => {
@@ -230,7 +325,7 @@ pub async fn auto_sync_if_enabled(config: &Config) -> Result<()> {
     if should_sync {
         // Perform sync directly without going through handle_sync_command
         // to avoid re-comparing timestamps with prompts' updated_at
-        let storage = Manager::new(config.clone());
+        let storage = PromptOperations::new(config.clone());
 
         if local_modified > remote_snippet.updated_at {
             // Upload local changes
@@ -261,10 +356,10 @@ fn normalize_toml_content(content: &str) -> String {
         .join("\n")
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::GistConfig;
     use chrono::Utc;
 
     #[test]

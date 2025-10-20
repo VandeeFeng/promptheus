@@ -2,8 +2,9 @@ use clap::{Parser, Subcommand, Args};
 use std::path::PathBuf;
 use anyhow::Result;
 use crate::config::Config;
-use crate::commands::{new, list, search, exec, edit, configure, show, delete};
-use crate::commands::{sync, push, export};
+use crate::manager::{handle_new_command, handle_list_command, handle_search_command, handle_exec_command,
+                      handle_edit_command, handle_config_command, handle_show_command, handle_delete_command,
+                      handle_sync_command, handle_push_command, handle_export_command};
 use crate::utils::print_warning;
 
 #[derive(Parser)]
@@ -25,40 +26,40 @@ impl Commands {
     pub async fn execute(self, config: Config) -> Result<()> {
         match self {
             Commands::New(args) => {
-                new::handle_new_command(config, &args).await?;
+                handle_new_command(config, &args).await?;
             }
             Commands::List(args) => {
-                list::handle_list_command(config, &args)?;
+                handle_list_command(config, &args)?;
             }
             Commands::Search(args) => {
-                search::handle_search_command(config, &args)?;
+                handle_search_command(config, &args)?;
             }
             Commands::Exec(args) => {
-                exec::handle_exec_command(config, &args)?;
+                handle_exec_command(config, &args)?;
             }
             Commands::Edit(args) => {
-                edit::handle_edit_command(config, &args).await?;
+                handle_edit_command(config, &args).await?;
             }
             Commands::Config(args) => {
-                configure::handle_config_command(config, args.command.clone())?;
+                handle_config_command(config, args.command.clone())?;
             }
             Commands::Show(args) => {
-                show::handle_show_command(config, &args)?;
+                handle_show_command(config, &args)?;
             }
             Commands::Delete(args) => {
-                delete::handle_delete_command(config, &args)?;
+                handle_delete_command(config, &args)?;
             }
             Commands::Sync(args) => {
-                sync::handle_sync_command(config, &args).await?;
+                handle_sync_command(config, &args).await?;
             }
             Commands::Push => {
-                push::handle_push_command(config).await?;
+                handle_push_command(config).await?;
             }
             Commands::Import(_) => {
                 print_warning("Import command not yet implemented");
             }
             Commands::Export(args) => {
-                export::handle_export_command(config, &args)?;
+                handle_export_command(config, &args)?;
             }
         }
         Ok(())

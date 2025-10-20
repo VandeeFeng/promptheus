@@ -1,6 +1,6 @@
 use colored::*;
-use crate::models::Prompt;
-use crate::utils::format_datetime;
+use crate::core::data::Prompt;
+use crate::utils::time_format::format_datetime;
 use crate::config::Config;
 use crate::cli::ListFormat;
 use anyhow::Result;
@@ -222,9 +222,19 @@ impl OutputStyle {
             String::new()
         };
 
-        format!("{}{}: {}{}",
+        let category_display = if let Some(category) = &prompt.category {
+            if category.trim().is_empty() {
+                Self::muted("[] ")
+            } else {
+                Self::tag(&format!("[{}] ", category))
+            }
+        } else {
+            Self::muted("[] ")
+        };
+
+        format!("{}: {}{}{}",
                 Self::description(&display.description),
-                Self::tag(display.category_formatted.trim_start_matches(" [").trim_end_matches("]")),
+                category_display,
                 display.tags_formatted,
                 Self::content(&content_display)
         )
@@ -253,28 +263,6 @@ impl OutputStyle {
     /// Print success message for clipboard operation
     pub fn print_clipboard_success() {
         println!("✓ {}", Self::success("Prompt copied to clipboard!"));
-    }
-
-    /// Format a prompt for interactive selection (exec, edit modes)
-    /// Shows description, category, tags, and content preview
-    pub fn format_prompt_for_interactive_selection(prompt: &Prompt) -> String {
-        let tags = if let Some(ref tags) = prompt.tag {
-            if tags.is_empty() {
-                String::new()
-            } else {
-                format!(" #{}", tags.join(" #"))
-            }
-        } else {
-            String::new()
-        };
-
-        let category = if let Some(cat) = &prompt.category {
-            format!(" [{}]", cat)
-        } else {
-            String::new()
-        };
-
-        format!("{}{}{}: {}", prompt.description, category, tags, prompt.content)
     }
 }
 
@@ -440,7 +428,7 @@ impl DisplayFormatter {
             println!("│ {:<width_title$} │ {:<width_tags$} │ {} │",
                 OutputStyle::description(&description),
                 OutputStyle::tags(&tag_str),
-                OutputStyle::muted(&crate::utils::format_datetime(&prompt.updated_at)),
+                OutputStyle::muted(&format_datetime(&prompt.updated_at)),
                 width_title = max_title_width,
                 width_tags = max_tag_width
             );

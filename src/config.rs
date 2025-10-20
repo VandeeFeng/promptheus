@@ -212,7 +212,7 @@ impl Config {
                 // Validate access token availability if gist_id is set (for updating existing gist)
                 if gist.gist_id.is_some() && gist.access_token.is_none() {
                     // Check environment variables
-                    if crate::sync::get_github_token().is_none() {
+                    if std::env::var("PROMPTHEUS_GITHUB_ACCESS_TOKEN").is_err() {
                         return Err(anyhow::anyhow!(
                             "GitHub access token is required for gist sync. Set it in config or use PROMPTHEUS_GITHUB_ACCESS_TOKEN environment variable"
                         ));
@@ -257,21 +257,4 @@ impl Config {
             .join("config.toml")
     }
 
-    pub fn ensure_prompt_file_exists(&self) -> Result<()> {
-        if !self.general.prompt_file.exists() {
-            if let Some(parent) = self.general.prompt_file.parent() {
-                std::fs::create_dir_all(parent)
-                    .with_context(|| format!("Failed to create prompt directory: {}", parent.display()))?;
-            }
-
-            let default_collection = crate::models::PromptCollection::default();
-            let content = toml::to_string_pretty(&default_collection)
-                .with_context(|| "Failed to create default prompt collection")?;
-
-            std::fs::write(&self.general.prompt_file, content)
-                .with_context(|| format!("Failed to create prompt file: {}", self.general.prompt_file.display()))?;
-        }
-
-        Ok(())
-    }
-}
+  }

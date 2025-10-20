@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
 use std::io::Write;
 use std::process::{Command, Stdio};
-use crate::models::{Prompt, PromptCollection};
+use crate::core::data::{Prompt, PromptCollection};
 use crate::config::Config;
-use crate::utils::OutputStyle;
+use crate::utils::output::OutputStyle;
 
 
 /// Search engine for prompt filtering and operations

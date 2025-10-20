@@ -1,3 +1,6 @@
+// Configuration operations
+// Consolidated from configure.rs
+
 use crate::config::Config;
 use crate::utils;
 use crate::cli::ConfigCommands;
@@ -69,7 +72,6 @@ fn handle_show_command(config: &Config) -> Result<()> {
     Ok(())
 }
 
-
 fn handle_config_help() -> Result<()> {
     println!("⚙️  Configuration Management");
     println!("==========================");
@@ -104,4 +106,3 @@ fn handle_reset_command(config: &mut Config) -> Result<()> {
     }
     Ok(())
 }
-

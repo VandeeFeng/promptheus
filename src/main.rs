@@ -1,10 +1,10 @@
+// Binary entry point - import modules directly
 mod cli;
-mod config;
-mod models;
 mod manager;
+mod config;
+mod core;
 mod sync;
 mod utils;
-mod commands;
 
 use anyhow::Result;
 use clap::Parser;

@@ -1,53 +1,7 @@
-use crate::cli::ExportArgs;
-use crate::config::Config;
-use anyhow::{Context, Result};
+use anyhow::{Result, Context};
 use serde_json;
-use std::fs;
 
-pub fn handle_export_command(config: Config, args: &ExportArgs) -> Result<()> {
-    let storage = crate::manager::Manager::new(config.clone());
-
-    let prompts = storage.search_prompts(None, None)
-        .context("Failed to load prompts")?;
-
-    if prompts.is_empty() {
-        eprintln!("No prompts found to export");
-        return Ok(());
-    }
-
-    let html_content = generate_html(&prompts)?;
-
-    // Determine output file path - default to same directory as prompts.toml
-    let default_filename = "prompts.html";
-    let output_path = if let Some(output) = &args.output {
-        if output.contains('/') || output.contains('\\') {
-            output.clone()
-        } else {
-            let config_dir = config.general.prompt_file.parent()
-                .ok_or_else(|| anyhow::anyhow!("Cannot determine config directory"))?;
-            config_dir.join(output).to_string_lossy().to_string()
-        }
-    } else {
-        // Use config directory with default filename
-        let config_dir = config.general.prompt_file.parent()
-            .ok_or_else(|| anyhow::anyhow!("Cannot determine config directory"))?;
-        config_dir.join(default_filename).to_string_lossy().to_string()
-    };
-
-    // Write HTML file
-    fs::write(&output_path, html_content)
-        .with_context(|| format!("Failed to write HTML file: {}", output_path))?;
-
-    println!("✅ Exported {} prompts to {}", prompts.len(), output_path);
-
-    if args.open {
-        open_browser(&output_path)?;
-    }
-
-    Ok(())
-}
-
-fn generate_html(prompts: &[crate::models::Prompt]) -> Result<String> {
+pub fn generate_html(prompts: &[crate::core::data::Prompt]) -> Result<String> {
     let prompts_json = serde_json::to_string(prompts)
         .context("Failed to serialize prompts to JSON")?;
 
@@ -758,7 +712,7 @@ fn generate_html(prompts: &[crate::models::Prompt]) -> Result<String> {
     Ok(html)
 }
 
-fn open_browser(path: &str) -> Result<()> {
+pub fn open_browser(path: &str) -> Result<()> {
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("cmd")

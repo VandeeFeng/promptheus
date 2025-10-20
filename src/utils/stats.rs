@@ -1,5 +1,5 @@
-use crate::models::PromptStats;
-use crate::utils::OutputStyle;
+use crate::core::data::PromptStats;
+use crate::utils::output::OutputStyle;
 
 /// Utilities for calculating and displaying prompt statistics
 pub struct StatsCalculator;

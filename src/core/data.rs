@@ -1,11 +1,16 @@
+//! Core data structures for prompt management
+//!
+//! This module contains the fundamental data structures used throughout
+//! the Promptheus application.
+
 use serde::{Deserialize, Serialize, Serializer};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
-use crate::utils::time_format;
-use crate::config::{Config, SortBy};
 use std::collections::HashMap;
+use crate::config::{Config, SortBy};
+use crate::utils::time_format;
 
-
+/// A single prompt with metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Prompt {
     #[serde(skip)]
@@ -27,13 +32,24 @@ pub struct Prompt {
     pub updated_at: DateTime<Utc>,
 }
 
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Collection of prompts with metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptCollection {
     pub prompts: Vec<Prompt>,
 }
 
+/// Statistics about the prompt collection
+#[derive(Debug)]
+pub struct PromptStats {
+    pub total_prompts: usize,
+    pub total_tags: usize,
+    pub total_categories: usize,
+    pub tag_counts: HashMap<String, usize>,
+    pub category_counts: HashMap<String, usize>,
+}
+
 impl Prompt {
+    /// Create a new prompt with the given description and content
     pub fn new(description: String, content: String) -> Self {
         let now = Utc::now();
         Self {
@@ -48,20 +64,19 @@ impl Prompt {
         }
     }
 
+    /// Add a tag to the prompt if it doesn't already exist
     pub fn add_tag(&mut self, tag: String) {
         if self.tag.is_none() {
             self.tag = Some(vec![tag]);
         } else if let Some(ref mut tags) = self.tag
             && !tags.contains(&tag) {
-                tags.push(tag);
-                self.updated_at = Utc::now();
-            }
+            tags.push(tag);
+            self.updated_at = Utc::now();
+        }
     }
-
 }
 
-
-// Custom serialization functions to always include tag and category fields
+/// Custom serialization functions to always include tag and category fields
 fn serialize_tag<S>(tag: &Option<Vec<String>>, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -82,17 +97,14 @@ where
     }
 }
 
-/// Statistics about prompts
-#[derive(Debug)]
-pub struct PromptStats {
-    pub total_prompts: usize,
-    pub total_tags: usize,
-    pub total_categories: usize,
-    pub tag_counts: HashMap<String, usize>,
-    pub category_counts: HashMap<String, usize>,
-}
-
 impl PromptCollection {
+    /// Create a new empty prompt collection
+    pub fn new() -> Self {
+        Self {
+            prompts: Vec::new(),
+        }
+    }
+
     /// Add a new prompt to the collection
     pub fn add_prompt(&mut self, prompt: Prompt) {
         self.prompts.push(prompt);
@@ -245,3 +257,18 @@ impl PromptCollection {
     }
 }
 
+impl Default for PromptCollection {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Display for Prompt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(category) = &self.category {
+            write!(f, "{} [{}]", self.description, category)
+        } else {
+            write!(f, "{}", self.description)
+        }
+    }
+}

@@ -204,18 +204,16 @@ impl OutputStyle {
     pub fn format_prompt_for_selection(prompt: &Prompt, config: &Config) -> String {
         let display = Self::build_prompt_display(prompt, config);
 
-        if config.general.content_preview {
-            format!("[{}]: {}{}",
-                    display.description,
-                    display.content_preview,
-                    display.tags_formatted + &display.category_formatted
-            )
+        let first_line = format!("[{}]:{}{}",
+                                display.description,
+                                display.category_formatted,
+                                display.tags_formatted
+        );
+
+        if config.general.content_preview && !display.content_preview.is_empty() {
+            format!("{}\n{}", first_line, display.content_preview)
         } else {
-            format!("[{}]{}{}",
-                    display.description,
-                    display.tags_formatted,
-                    display.category_formatted
-            )
+            first_line
         }
     }
 

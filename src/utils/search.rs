@@ -51,9 +51,12 @@ impl SearchEngine {
 
     /// Find prompt by parsing its display line
     pub fn find_by_display_line(prompts: &[Prompt], selected_line: &str) -> Option<usize> {
-        // Extract description from format: [description]: content #tags [category]
-        if let Some(desc_end) = selected_line.find("]:") {
-            let description = &selected_line[1..desc_end]; // Remove [ and ]
+        // Extract description from format: [description]: [category] #tags content
+        // Handle multi-line format by taking only the first line
+        let first_line = selected_line.lines().next().unwrap_or(selected_line);
+
+        if let Some(desc_end) = first_line.find("]:") {
+            let description = &first_line[1..desc_end]; // Remove [ and ]
 
             for (i, prompt) in prompts.iter().enumerate() {
                 if prompt.description == description {
@@ -85,9 +88,8 @@ pub fn interactive_search_with_external_tool(
 
     // Check if command exists
     match std::process::Command::new(cmd_parts[0]).arg("--version").output() {
-        Ok(_) => {}, // Command exists
+        Ok(_) => {},
         Err(_) => {
-            // Command doesn't exist, return None to trigger fallback
             return Ok(None);
         }
     }
@@ -107,6 +109,9 @@ pub fn interactive_search_with_external_tool(
             "--border",
             "--inline-info",
             "--prompt=o ",
+            "--read0",
+            "--ansi",
+            "--expect=ctrl-c,esc",
         ]);
 
         if let Some(q) = query {
@@ -122,8 +127,8 @@ pub fn interactive_search_with_external_tool(
 
     // Set up stdin/stdout
     cmd.stdin(Stdio::piped())
-       .stdout(Stdio::piped())
-       .stderr(Stdio::piped()); // Capture stderr instead of inheriting
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped()); // Capture stderr instead of inheriting
 
     let mut child = cmd.spawn()
         .with_context(|| format!("Failed to spawn command: {}", select_cmd))?;
@@ -131,7 +136,9 @@ pub fn interactive_search_with_external_tool(
     // Write items to stdin
     if let Some(stdin) = child.stdin.as_mut() {
         for item in items {
-            writeln!(stdin, "{}", item)?;
+            // Write each item followed by NULL character for fzf --read0
+            stdin.write_all(item.as_bytes())?;
+            stdin.write_all(b"\0")?;
         }
     }
 
@@ -146,7 +153,14 @@ pub fn interactive_search_with_external_tool(
     }
 
     let result = String::from_utf8_lossy(&output.stdout);
-    let selected = result.trim();
+    let lines: Vec<&str> = result.lines().collect();
+
+    // With --expect, fzf returns key press on first line, selection on second line
+    if lines.len() < 2 {
+        return Ok(None);
+    }
+
+    let selected = lines[1].trim();
 
     if selected.is_empty() {
         Ok(None)

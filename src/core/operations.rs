@@ -91,12 +91,10 @@ impl PromptOperations {
         self.format_for_selection(query, tag, category)
     }
 
-    /// Get all prompts with convenience wrapper
     pub fn get_all_prompts(&self) -> Result<Vec<Prompt>> {
         self.search_prompts(None, None)
     }
 
-    /// Get all prompts or return early if empty
     pub fn get_all_prompts_or_return_empty(&self) -> Result<Vec<Prompt>> {
         let prompts = self.get_all_prompts()?;
         if prompts.is_empty() {
@@ -243,7 +241,7 @@ impl PromptInteraction for PromptOperations {
             &self.config.general.select_cmd,
             None
         )? {
-            if let Some(index) = display_strings.iter().position(|d| d == &selected_line) {
+            if let Some(index) = self.find_prompt_by_display_line(&prompts, &selected_line) {
                 Ok(Some(prompts[index].clone()))
             } else {
                 Ok(None)

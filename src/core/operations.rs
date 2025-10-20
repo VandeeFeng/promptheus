@@ -219,7 +219,8 @@ impl PromptInteraction for PromptOperations {
             copy_fn(&rendered_content)?;
             crate::utils::output::OutputStyle::print_clipboard_success();
         } else {
-            crate::utils::output::OutputStyle::print_rendered_content(&rendered_content);
+            // Show content with pagination if needed
+            crate::utils::output::OutputStyle::ask_and_display_content(&rendered_content, "📄 Content")?;
         }
 
         Ok(())

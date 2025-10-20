@@ -20,7 +20,6 @@ enum PromptField {
     Category,
     Tags,
     Created,
-    Updated,
 }
 
 pub struct OutputStyle;
@@ -125,29 +124,31 @@ impl OutputStyle {
             }
             PromptField::Created =>
                 Self::print_field_colored("Created", &format_datetime(&prompt.created_at), Self::muted),
-            PromptField::Updated =>
-                Self::print_field_colored("Updated", &format_datetime(&prompt.updated_at), Self::muted),
         }
     }
 
-    // Unified prompt display functions
-    pub fn print_prompt_basic(prompt: &Prompt) {
-        println!("  Description: {}", Self::description(&prompt.description));
-        println!("  Content: {}", Self::content(&prompt.content));
-        println!("  Created: {}", Self::muted(&format_datetime(&prompt.created_at)));
-    }
-
-    pub fn print_prompt_detailed(prompt: &Prompt) {
-        println!("{}", Self::title("📝 Prompt Details"));
-
+    /// Print all prompt metadata fields (ID, Description, Category, Tags, Created)
+    pub fn print_prompt_metadata(prompt: &Prompt) {
         Self::print_prompt_field(PromptField::Id, prompt);
         Self::print_prompt_field(PromptField::Description, prompt);
         Self::print_prompt_field(PromptField::Category, prompt);
         Self::print_prompt_field(PromptField::Tags, prompt);
         Self::print_prompt_field(PromptField::Created, prompt);
+    }
+
+    /// Print basic prompt metadata fields (Description, Created)
+    pub fn print_prompt_metadata_basic(prompt: &Prompt) {
+        println!("  Description: {}", Self::description(&prompt.description));
+        println!("  Created: {}", Self::muted(&format_datetime(&prompt.created_at)));
+    }
+
+    // Unified prompt display functions
+    pub fn print_prompt_basic(prompt: &Prompt) {
+        println!("{}", Self::title("📝 Prompt Details"));
+        Self::print_prompt_metadata_basic(prompt);
 
         println!("\n{}:", Self::title("📄 Content"));
-        println!("{}", Self::content(&prompt.content));
+        Self::print_content_full(&prompt.content);
     }
 
     pub fn print_prompt_list_preview(prompt: &Prompt) {
@@ -167,18 +168,11 @@ impl OutputStyle {
         }
 
         Self::print_prompt_field(PromptField::Created, prompt);
-        Self::print_prompt_field(PromptField::Updated, prompt);
 
-        // Show preview of content
-        let lines: Vec<&str> = prompt.content.lines().take(3).collect();
-        if !lines.is_empty() {
+        // Show truncated content for list preview
+        if !prompt.content.trim().is_empty() {
             println!("   {}:", Self::label("Preview"));
-            for line in lines {
-                println!("     {}", Self::content(line));
-            }
-            if prompt.content.lines().count() > 3 {
-                println!("     {}", Self::muted("..."));
-            }
+            Self::print_content_truncated(&prompt.content);
         }
     }
 
@@ -265,18 +259,86 @@ impl OutputStyle {
         }
     }
 
-    /// Print rendered prompt content with formatting
-    pub fn print_rendered_content(content: &str) {
-        println!("\n{}:", Self::header("📤 Rendered Prompt"));
-        println!("{}", Self::header_separator());
+    /// Print full prompt content
+    pub fn print_content_full(content: &str) {
         println!("{}", Self::content(content));
-        println!("{}", Self::header_separator());
+    }
+
+    /// Print truncated prompt content (beginning + [...] + end)
+    pub fn print_content_truncated(content: &str) {
+        let lines: Vec<&str> = content.lines().collect();
+        if lines.len() <= 10 {
+            // If content is short, show full content
+            println!("{}", Self::content(content));
+        } else {
+            // Show first 5 lines
+            for line in lines.iter().take(5) {
+                println!("{}", Self::content(line));
+            }
+            // Show truncation indicator
+            println!("{}", Self::muted("[...]"));
+            // Show last 5 lines
+            for line in lines.iter().skip(lines.len() - 5) {
+                println!("{}", Self::content(line));
+            }
+        }
     }
 
     /// Print success message for clipboard operation
     pub fn print_clipboard_success() {
         println!("✓ {}", Self::success("Prompt copied to clipboard!"));
     }
+
+    /// Ask user about pagination and display content accordingly
+    pub fn ask_and_display_content(content: &str, title: &str) -> Result<()> {
+        use std::io::{self, Write};
+        use crate::utils::{get_terminal_size, should_paginate, paginate_static_content};
+
+        // Check if content should be paginated
+        let (_, terminal_height) = get_terminal_size().unwrap_or((24, 80));
+
+        if should_paginate(content, terminal_height) {
+            // Ask user if they want to preview the full content in pager
+            print!("\n{} View {} in pager? (y/N): ", Self::info("?"), title);
+            io::stdout().flush().unwrap();
+
+            let mut input = String::new();
+            io::stdin().read_line(&mut input).unwrap();
+
+            if input.trim().to_lowercase() == "y" || input.trim().to_lowercase() == "yes" {
+                let content_display = format!("\n{}:\n{}",
+                                              Self::title(title),
+                                              content
+                );
+                paginate_static_content(&content_display)?;
+            } else {
+                // Show brief preview without pagination
+                println!("\n{}:", Self::title(title));
+                Self::print_content_truncated(content);
+            }
+        } else {
+            // Show full content for short content
+            println!("\n{}:", Self::title(title));
+            Self::print_content_full(content);
+        }
+
+        Ok(())
+    }
+
+    /// Display complete prompt with metadata and content (handles all logic internally)
+    pub fn display_prompt_complete(prompt: &Prompt) -> Result<()> {
+        // Show prompt details header
+        println!("{}", Self::title("📝 Prompt Details"));
+
+        // Show metadata
+        Self::print_prompt_metadata(prompt);
+
+        // Show content with pagination if needed
+        Self::ask_and_display_content(&prompt.content, "📄 Content")?;
+
+        Ok(())
+    }
+
 }
 
 // Utility functions for common patterns
@@ -359,8 +421,15 @@ impl DisplayFormatter {
         println!("{}", OutputStyle::separator());
 
         for prompt in prompts {
+            // Show basic info line
             let formatted_line = OutputStyle::format_prompt_line(prompt, config);
             println!("{}", formatted_line);
+
+            // Show truncated content if content exists and is configured for preview
+            if config.general.content_preview && !prompt.content.trim().is_empty() {
+                OutputStyle::print_content_truncated(&prompt.content);
+                println!("{}", OutputStyle::separator());
+            }
         }
     }
 
@@ -398,21 +467,21 @@ impl DisplayFormatter {
 
         // Print header with colors
         println!("┌─{}─┬─{}─┬─{}─┐",
-            "─".repeat(max_title_width),
-            "─".repeat(max_tag_width),
-            "─".repeat(19) // Date column
+                 "─".repeat(max_title_width),
+                 "─".repeat(max_tag_width),
+                 "─".repeat(19) // Date column
         );
         println!("│ {:<width_title$} │ {:<width_tags$} │ {:^19} │",
-            OutputStyle::header("Description"),
-            OutputStyle::header("Tags"),
-            OutputStyle::header("Updated"),
-            width_title = max_title_width,
-            width_tags = max_tag_width
+                 OutputStyle::header("Description"),
+                 OutputStyle::header("Tags"),
+                 OutputStyle::header("Updated"),
+                 width_title = max_title_width,
+                 width_tags = max_tag_width
         );
         println!("├─{}─┼─{}─┼─{}─┤",
-            "─".repeat(max_title_width),
-            "─".repeat(max_tag_width),
-            "─".repeat(19)
+                 "─".repeat(max_title_width),
+                 "─".repeat(max_tag_width),
+                 "─".repeat(19)
         );
 
         // Print rows with colors
@@ -422,18 +491,18 @@ impl DisplayFormatter {
             let tag_str = truncate_string(&tag_str, max_tag_width);
 
             println!("│ {:<width_title$} │ {:<width_tags$} │ {} │",
-                OutputStyle::description(&description),
-                OutputStyle::tags(&tag_str),
-                OutputStyle::muted(&format_datetime(&prompt.updated_at)),
-                width_title = max_title_width,
-                width_tags = max_tag_width
+                     OutputStyle::description(&description),
+                     OutputStyle::tags(&tag_str),
+                     OutputStyle::muted(&format_datetime(&prompt.updated_at)),
+                     width_title = max_title_width,
+                     width_tags = max_tag_width
             );
         }
 
         println!("└─{}─┴─{}─┴─{}─┘",
-            "─".repeat(max_title_width),
-            "─".repeat(max_tag_width),
-            "─".repeat(19)
+                 "─".repeat(max_title_width),
+                 "─".repeat(max_tag_width),
+                 "─".repeat(19)
         );
     }
 

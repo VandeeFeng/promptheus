@@ -6,7 +6,7 @@ use crate::config::Config;
 use crate::core::traits::{PromptSearch, PromptInteraction, PromptDisplay};
 use crate::core::operations::PromptOperations;
 use crate::utils;
-use crate::utils::{handle_empty_list, print_cancelled, handle_not_found, copy_to_clipboard, print_success};
+use crate::utils::{handle_empty_list, print_cancelled, handle_not_found, copy_to_clipboard, print_success, OutputStyle};
 use anyhow::Result;
 
 // List operations
@@ -82,7 +82,9 @@ pub fn handle_search_command(
             manager.execute_prompt(prompt, args.copy)?;
         } else {
             use crate::utils::OutputStyle;
-            OutputStyle::print_prompt_detailed(prompt);
+
+            // Display complete prompt with all logic handled internally
+            OutputStyle::display_prompt_complete(prompt)?;
         }
     }
 
@@ -118,23 +120,39 @@ pub fn handle_exec_command(
 fn handle_interactive_exec(config: Config, _args: &ExecArgs) -> Result<()> {
     let manager = PromptOperations::new(&config);
 
-    // Get all prompts for selection
-    let prompts = manager.get_all_prompts_or_return_empty()?;
+    // Get all prompts for selection using same method as search
+    let search_results = manager.search_and_format_for_selection(None, None, None)?;
 
-    // Use unified interactive selection
-    if let Some(prompt) = manager.select_interactive_prompts(prompts)? {
-        // For interactive mode: show only content and copy to clipboard
+    if search_results.is_empty() {
+        handle_empty_list("prompts");
+        return Ok(());
+    }
+
+    let (prompts, display_strings): (Vec<_>, Vec<_>) = search_results.into_iter().unzip();
+
+    // Use same interactive selection logic as search
+    let selected_prompt = if let Some(selected_line) = utils::interactive_search_with_external_tool(
+        &display_strings,
+        &manager.config().general.select_cmd,
+        None
+    )? {
+        manager.find_prompt_by_display_line(&prompts, &selected_line).map(|index| &prompts[index])
+    } else {
+        print_cancelled("Prompt selection cancelled");
+        return Ok(());
+    };
+
+    if let Some(prompt) = selected_prompt {
         let rendered_content = prompt.content.clone();
 
-        println!("{}", rendered_content);
+        // Show content with pagination if needed
+        OutputStyle::ask_and_display_content(&rendered_content, "📄 Content")?;
 
         // Always copy to clipboard in interactive mode
         copy_to_clipboard(&rendered_content)?;
         print_success("Prompt copied to clipboard!");
-    } else {
-        print_cancelled("Prompt selection cancelled");
-        return Ok(());
     }
 
     Ok(())
 }
+

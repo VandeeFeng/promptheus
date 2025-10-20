@@ -96,7 +96,8 @@ pub fn handle_show_command(
     let manager = PromptOperations::new(&config);
 
     if let Some(prompt) = manager.find_prompt(&args.identifier)? {
-        OutputStyle::print_prompt_detailed(&prompt);
+        // Display complete prompt with all logic handled internally
+        OutputStyle::display_prompt_complete(&prompt)?;
     } else {
         handle_not_found("Prompt", &args.identifier);
     }

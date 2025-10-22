@@ -6,14 +6,14 @@ use crate::config::Config;
 use crate::core::traits::{PromptSearch, PromptInteraction, PromptDisplay};
 use crate::core::operations::PromptOperations;
 use crate::utils;
-use crate::utils::{handle_empty_list, print_cancelled, handle_not_found, copy_to_clipboard, print_success, OutputStyle};
-use anyhow::Result;
+use crate::utils::{copy_to_clipboard, print_success, OutputStyle};
+use crate::utils::error::{handle_flow, FlowResult, AppResult};
 
 // List operations
 pub fn handle_list_command(
     config: Config,
     args: &ListArgs,
-) -> Result<()> {
+) -> AppResult<()> {
     let manager = PromptOperations::new(&config);
 
     // Handle tags listing
@@ -33,7 +33,9 @@ pub fn handle_list_command(
     let search_results = manager.search_and_format_for_selection(None, args.tag.as_deref(), args.category.as_deref())?;
 
     if search_results.is_empty() {
-        handle_empty_list("prompts matching your criteria");
+        handle_flow(FlowResult::EmptyList {
+            item_type: "prompts matching your criteria".to_string(),
+        });
         return Ok(());
     }
 
@@ -49,7 +51,7 @@ pub fn handle_list_command(
 pub fn handle_search_command(
     config: Config,
     args: &SearchArgs,
-) -> Result<()> {
+) -> AppResult<()> {
     let manager = PromptOperations::new(&config);
 
     let search_results = manager.search_and_format_for_selection(
@@ -59,7 +61,9 @@ pub fn handle_search_command(
     )?;
 
     if search_results.is_empty() {
-        handle_empty_list("prompts matching your criteria");
+        handle_flow(FlowResult::EmptyList {
+            item_type: "prompts matching your criteria".to_string(),
+        });
         return Ok(());
     }
 
@@ -73,7 +77,7 @@ pub fn handle_search_command(
     )? {
         manager.find_prompt_by_display_line(&prompts, &selected_line).map(|index| &prompts[index])
     } else {
-        print_cancelled("Search cancelled");
+        handle_flow(FlowResult::Cancelled("Search cancelled".to_string()));
         return Ok(());
     };
 
@@ -91,7 +95,7 @@ pub fn handle_search_command(
 pub fn handle_exec_command(
     config: Config,
     args: &ExecArgs,
-) -> Result<()> {
+) -> AppResult<()> {
     match &args.identifier {
         Some(identifier) => {
             // Direct execution with ID or description
@@ -101,7 +105,10 @@ pub fn handle_exec_command(
                 manager.execute_prompt(&prompt, true)?;
             } else {
                 // Handle not found as notification, not error
-                handle_not_found("Prompt with ID or description", identifier);
+                handle_flow(FlowResult::NotFound {
+                    item_type: "Prompt with ID or description".to_string(),
+                    search_term: identifier.to_string(),
+                });
                 return Ok(());
             }
         }
@@ -114,14 +121,16 @@ pub fn handle_exec_command(
     Ok(())
 }
 
-fn handle_interactive_exec(config: Config, _args: &ExecArgs) -> Result<()> {
+fn handle_interactive_exec(config: Config, _args: &ExecArgs) -> AppResult<()> {
     let manager = PromptOperations::new(&config);
 
     // Get all prompts for selection using same method as search
     let search_results = manager.search_and_format_for_selection(None, None, None)?;
 
     if search_results.is_empty() {
-        handle_empty_list("prompts");
+        handle_flow(FlowResult::EmptyList {
+            item_type: "prompts".to_string(),
+        });
         return Ok(());
     }
 
@@ -135,7 +144,7 @@ fn handle_interactive_exec(config: Config, _args: &ExecArgs) -> Result<()> {
     )? {
         manager.find_prompt_by_display_line(&prompts, &selected_line).map(|index| &prompts[index])
     } else {
-        print_cancelled("Prompt selection cancelled");
+        handle_flow(FlowResult::Cancelled("Prompt selection cancelled".to_string()));
         return Ok(());
     };
 

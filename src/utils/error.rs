@@ -1,51 +1,71 @@
 use crate::utils::output::OutputStyle;
+use thiserror::Error;
 
-/// Unified error handling and user feedback utilities
-///
-/// Distinguishes between two types of situations:
-/// 1. System errors: Technical issues that should return Err
-/// 2. Flow results: Normal business logic results that need user notification
-///
-/// System-level error output (red)
-/// Used for file, network, process, and other technical issues
-pub fn print_system_error(message: &str) {
-    eprintln!("❌ {}", OutputStyle::error(message));
+#[derive(Error, Debug, Clone)]
+pub enum AppError {
+    #[error("Network error: {0}")]
+    Network(String),
+
+    #[error("Sync error: {0}")]
+    Sync(String),
+
+    #[error("System error: {0}")]
+    System(String),
+
+    #[error("IO error: {0}")]
+    Io(String),
 }
 
+/// Result type alias for consistent error handling across the application
+pub type AppResult<T> = Result<T, AppError>;
 
-/// Not found result notification (yellow)
-/// Used for search without results, prompt not found, etc.
-pub fn print_not_found(message: &str) {
-    println!("⚠️  {}", OutputStyle::warning(message));
+pub enum FlowResult {
+    NotFound {
+        item_type: String,
+        search_term: String,
+    },
+    EmptyList {
+        item_type: String,
+    },
+    Cancelled(String),
+    Success(String),
 }
 
-/// Empty result notification (gray)
-/// Used for empty lists, no data, etc.
-pub fn print_empty_result(message: &str) {
-    println!("{}", OutputStyle::muted(message));
+pub fn report_error(err: &AppError) {
+    match err {
+        AppError::Network(msg) => {
+            println!("🌐 {}", OutputStyle::error(&format!("Network: {}", msg)));
+        }
+        AppError::Sync(msg) => {
+            println!("⚠️  {}", OutputStyle::warning(&format!("Sync: {}", msg)));
+        }
+        AppError::Io(e) => {
+            eprintln!("❌ {}", OutputStyle::error(e));
+        }
+        AppError::System(msg) => {
+            eprintln!("❌ {}", OutputStyle::error(msg));
+        }
+    }
 }
 
-/// User cancelled operation notification
-pub fn print_cancelled(message: &str) {
-    println!("⏹️  {}", OutputStyle::muted(message));
-}
-
-/// Auto-sync failure notification (warning level)
-pub fn print_sync_warning(message: &str) {
-    println!("⚠️  {}", OutputStyle::warning(&format!("Sync: {}", message)));
-}
-
-/// Network issue notification
-pub fn print_network_error(message: &str) {
-    println!("🌐 {}", OutputStyle::error(&format!("Network: {}", message)));
-}
-
-/// Handle "not found" situation output uniformly
-pub fn handle_not_found(item_type: &str, search_term: &str) {
-    print_not_found(&format!("{} '{}' not found", item_type, search_term));
-}
-
-/// Handle empty list output uniformly
-pub fn handle_empty_list(item_type: &str) {
-    print_empty_result(&format!("No {} found", item_type));
+pub fn handle_flow(flow: FlowResult) {
+    match flow {
+        FlowResult::NotFound {
+            item_type,
+            search_term,
+        } => {
+            let msg = format!("{} '{}' not found", item_type, search_term);
+            println!("⚠️  {}", OutputStyle::warning(&msg));
+        }
+        FlowResult::EmptyList { item_type } => {
+            let msg = format!("No {} found", item_type);
+            println!("{}", OutputStyle::muted(&msg));
+        }
+        FlowResult::Cancelled(msg) => {
+            println!("⏹️  {}", OutputStyle::muted(&msg));
+        }
+        FlowResult::Success(msg) => {
+            println!("✅ {}", OutputStyle::success(&msg));
+        }
+    }
 }

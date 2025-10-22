@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::utils::error::{AppResult, AppError};
 use std::io::Write;
 use std::process::{Command, Stdio};
 use crate::core::data::{Prompt, PromptCollection};
@@ -75,7 +75,7 @@ pub fn interactive_search_with_external_tool(
     items: &[String],
     select_cmd: &str,
     query: Option<&str>
-) -> Result<Option<String>> {
+) -> AppResult<Option<String>> {
     if items.is_empty() {
         return Ok(None);
     }
@@ -83,7 +83,7 @@ pub fn interactive_search_with_external_tool(
     // Check if the select command is available
     let cmd_parts: Vec<&str> = select_cmd.split_whitespace().collect();
     if cmd_parts.is_empty() {
-        return Err(anyhow::anyhow!("Invalid select command: {}", select_cmd));
+        return Err(AppError::System(format!("Invalid select command: {}", select_cmd)));
     }
 
     // Check if command exists
@@ -131,20 +131,20 @@ pub fn interactive_search_with_external_tool(
         .stderr(Stdio::piped()); // Capture stderr instead of inheriting
 
     let mut child = cmd.spawn()
-        .with_context(|| format!("Failed to spawn command: {}", select_cmd))?;
+        .map_err(|e| AppError::System(format!("Failed to spawn command: {}: {}", select_cmd, e)))?;
 
     // Write items to stdin
     if let Some(stdin) = child.stdin.as_mut() {
         for item in items {
             // Write each item followed by NULL character for fzf --read0
-            stdin.write_all(item.as_bytes())?;
-            stdin.write_all(b"\0")?;
+            stdin.write_all(item.as_bytes()).map_err(|e| AppError::Io(format!("Failed to write to stdin: {}", e)))?;
+            stdin.write_all(b"\0").map_err(|e| AppError::Io(format!("Failed to write NULL separator to stdin: {}", e)))?;
         }
     }
 
     // Read the result
     let output = child.wait_with_output()
-        .with_context(|| format!("Failed to read output from: {}", select_cmd))?;
+        .map_err(|e| AppError::System(format!("Failed to read output from: {}: {}", select_cmd, e)))?;
 
     // Check if the command was successful
     // Some tools like fzf return exit code 130 when user presses Ctrl+C or Esc

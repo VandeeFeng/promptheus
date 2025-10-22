@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use anyhow::{Context, Result};
+use crate::utils::error::{AppResult, AppError};
 use std::path::PathBuf;
 use crate::utils::console::detect_editor;
 
@@ -119,11 +119,11 @@ fn detect_best_select_command() -> String {
 }
 
 impl Config {
-    pub fn load() -> Result<Self> {
+    pub fn load() -> AppResult<Self> {
         Self::load_custom(&Self::config_file_path())
     }
 
-    pub fn ensure_config_exists() -> Result<()> {
+    pub fn ensure_config_exists() -> AppResult<()> {
         let config_path = Self::config_file_path();
         if !config_path.exists() {
             let default_config = Config::default();
@@ -132,7 +132,7 @@ impl Config {
         Ok(())
     }
 
-    pub fn load_custom(config_path: &std::path::Path) -> Result<Self> {
+    pub fn load_custom(config_path: &std::path::Path) -> AppResult<Self> {
         if !config_path.exists() {
             let default_config = Config::default();
             default_config.save()?;
@@ -140,30 +140,30 @@ impl Config {
         }
 
         let content = std::fs::read_to_string(config_path)
-            .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
+            .map_err(|e| AppError::Io(e.to_string()))?;
 
         let config: Config = toml::from_str(&content)
-            .with_context(|| "Failed to parse config file")?;
+            .map_err(|e| AppError::System(format!("Failed to parse config file: {}", e)))?;
 
         config.validate()?;
         Ok(config)
     }
 
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> AppResult<()> {
         if self.general.editor.is_empty() {
-            return Err(anyhow::anyhow!("Editor cannot be empty"));
+            return Err(AppError::System("Editor cannot be empty".to_string()));
         }
 
         if self.general.select_cmd.is_empty() {
-            return Err(anyhow::anyhow!("Select command cannot be empty"));
+            return Err(AppError::System("Select command cannot be empty".to_string()));
         }
 
         if let Some(gitlab) = &self.gitlab {
             if gitlab.url.is_empty() {
-                return Err(anyhow::anyhow!("GitLab URL cannot be empty"));
+                return Err(AppError::System("GitLab URL cannot be empty".to_string()));
             }
             if gitlab.file_name.is_empty() {
-                return Err(anyhow::anyhow!("GitLab file name cannot be empty"));
+                return Err(AppError::System("GitLab file name cannot be empty".to_string()));
             }
         }
 
@@ -171,15 +171,15 @@ impl Config {
             // Only validate gist configuration if it's actually being used (has gist_id or non-empty file_name)
             if gist.gist_id.is_some() || !gist.file_name.is_empty() {
                 if gist.file_name.is_empty() {
-                    return Err(anyhow::anyhow!("Gist file name cannot be empty when gist sync is configured"));
+                    return Err(AppError::System("Gist file name cannot be empty when gist sync is configured".to_string()));
                 }
 
                 // Validate access token availability if gist_id is set (for updating existing gist)
                 if gist.gist_id.is_some() && gist.access_token.is_none() {
                     // Check environment variables
                     if std::env::var("PROMPTHEUS_GITHUB_ACCESS_TOKEN").is_err() {
-                        return Err(anyhow::anyhow!(
-                            "GitHub access token is required for gist sync. Set it in config or use PROMPTHEUS_GITHUB_ACCESS_TOKEN environment variable"
+                        return Err(AppError::System(
+                            "GitHub access token is required for gist sync. Set it in config or use PROMPTHEUS_GITHUB_ACCESS_TOKEN environment variable".to_string()
                         ));
                     }
                 }
@@ -188,8 +188,8 @@ impl Config {
                 if !std::path::Path::new(&gist.file_name)
                 .extension()
                 .is_some_and(|ext| ext.eq_ignore_ascii_case("toml")) {
-                    return Err(anyhow::anyhow!(
-                        "Gist file name should have .toml extension for proper prompt storage"
+                    return Err(AppError::System(
+                        "Gist file name should have .toml extension for proper prompt storage".to_string()
                     ));
                 }
             }
@@ -198,19 +198,19 @@ impl Config {
         Ok(())
     }
 
-    pub fn save(&self) -> Result<()> {
+    pub fn save(&self) -> AppResult<()> {
         let config_path = Self::config_file_path();
 
         if let Some(parent) = config_path.parent() {
             std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create config directory: {}", parent.display()))?;
+                .map_err(|e| AppError::Io(e.to_string()))?;
         }
 
         let content = toml::to_string_pretty(self)
-            .with_context(|| "Failed to serialize config")?;
+            .map_err(|e| AppError::System(format!("Failed to serialize config: {}", e)))?;
 
         std::fs::write(&config_path, content)
-            .with_context(|| format!("Failed to write config file: {}", config_path.display()))?;
+            .map_err(|e| AppError::Io(e.to_string()))?;
 
         Ok(())
     }

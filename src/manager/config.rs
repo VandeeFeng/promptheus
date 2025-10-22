@@ -4,12 +4,12 @@
 use crate::config::Config;
 use crate::utils;
 use crate::cli::ConfigCommands;
-use anyhow::Result;
+use crate::utils::error::AppResult;
 
 pub fn handle_config_command(
     mut config: Config,
     command: Option<ConfigCommands>,
-) -> Result<()> {
+) -> AppResult<()> {
     match command {
         Some(ConfigCommands::Show) => handle_show_command(&config),
         Some(ConfigCommands::Open) => handle_open_command(),
@@ -18,7 +18,7 @@ pub fn handle_config_command(
     }
 }
 
-fn handle_show_command(config: &Config) -> Result<()> {
+fn handle_show_command(config: &Config) -> AppResult<()> {
     println!("⚙️  Promptheus Configuration");
     println!("==========================");
 
@@ -72,7 +72,7 @@ fn handle_show_command(config: &Config) -> Result<()> {
     Ok(())
 }
 
-fn handle_config_help() -> Result<()> {
+fn handle_config_help() -> AppResult<()> {
     println!("⚙️  Configuration Management");
     println!("==========================");
     println!("Available configuration commands:");
@@ -84,7 +84,7 @@ fn handle_config_help() -> Result<()> {
     Ok(())
 }
 
-fn handle_open_command() -> Result<()> {
+fn handle_open_command() -> AppResult<()> {
     // Ensure config file exists
     let config = Config::load()?;
 
@@ -96,7 +96,7 @@ fn handle_open_command() -> Result<()> {
     Ok(())
 }
 
-fn handle_reset_command(config: &mut Config) -> Result<()> {
+fn handle_reset_command(config: &mut Config) -> AppResult<()> {
     if utils::prompt_yes_no("Are you sure you want to reset configuration to defaults? This will overwrite your current settings.")? {
         *config = Config::default();
         config.save()?;

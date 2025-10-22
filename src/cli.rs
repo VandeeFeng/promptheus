@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand, Args};
 use std::path::PathBuf;
-use anyhow::Result;
 use crate::config::Config;
+use crate::utils::error::AppResult;
 use crate::manager::{handle_new_command, handle_list_command, handle_search_command, handle_exec_command,
                       handle_edit_command, handle_config_command, handle_show_command, handle_delete_command,
                       handle_sync_command, handle_push_command, handle_export_command};
@@ -23,7 +23,7 @@ pub struct Cli {
 }
 
 impl Commands {
-    pub async fn execute(self, config: Config) -> Result<()> {
+    pub async fn execute(self, config: Config) -> AppResult<()> {
         match self {
             Commands::New(args) => {
                 handle_new_command(config, &args).await?;

@@ -1,6 +1,6 @@
 pub mod gist;
 
-use anyhow::Result;
+use crate::utils::error::AppResult;
 use chrono::{DateTime, Utc};
 use async_trait::async_trait;
 
@@ -12,8 +12,8 @@ pub struct RemoteSnippet {
 
 #[async_trait]
 pub trait SyncClient {
-    async fn get_remote(&self) -> Result<RemoteSnippet>;
-    async fn upload(&self, content: String) -> Result<()>;
+    async fn get_remote(&self) -> AppResult<RemoteSnippet>;
+    async fn upload(&self, content: String) -> AppResult<()>;
 }
 
 /// Determine if sync should happen based on timestamps and force flag

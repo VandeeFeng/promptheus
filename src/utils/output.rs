@@ -3,7 +3,7 @@ use crate::core::data::Prompt;
 use crate::utils::format::{format_datetime, format_tags_comma, format_tags_hash, format_category_info, truncate_string};
 use crate::config::Config;
 use crate::cli::ListFormat;
-use anyhow::Result;
+use crate::utils::error::{AppResult, AppError};
 
 /// Display components for a prompt, used for consistent formatting
 pub struct PromptDisplay {
@@ -283,7 +283,7 @@ impl OutputStyle {
     }
 
     /// Ask user about pagination and display content accordingly
-    pub fn ask_and_display_content(content: &str, title: &str) -> Result<()> {
+    pub fn ask_and_display_content(content: &str, title: &str) -> AppResult<()> {
         use std::io::{self, Write};
         use crate::utils::{get_terminal_size, should_paginate, paginate_static_content};
 
@@ -319,7 +319,7 @@ impl OutputStyle {
     }
 
     /// Display complete prompt with metadata and content (handles all logic internally)
-    pub fn display_prompt_complete(prompt: &Prompt) -> Result<()> {
+    pub fn display_prompt_complete(prompt: &Prompt) -> AppResult<()> {
         // Show prompt details header
         println!("{}", Self::title("📝 Prompt Details"));
 
@@ -360,9 +360,11 @@ pub struct DisplayFormatter;
 
 impl DisplayFormatter {
     /// Format prompts list according to the specified format
-    pub fn format_list(prompts: &[Prompt], format: &ListFormat, config: &Config) -> Result<()> {
+    pub fn format_list(prompts: &[Prompt], format: &ListFormat, config: &Config) -> AppResult<()> {
         if prompts.is_empty() {
-            crate::utils::handle_empty_list("prompts matching your criteria");
+            crate::utils::error::handle_flow(crate::utils::error::FlowResult::EmptyList {
+                item_type: "prompts matching your criteria".to_string(),
+            });
             return Ok(());
         }
 
@@ -377,9 +379,11 @@ impl DisplayFormatter {
     }
 
     /// Print tags list
-    pub fn print_tags(tags: &[String]) -> Result<()> {
+    pub fn print_tags(tags: &[String]) -> AppResult<()> {
         if tags.is_empty() {
-            crate::utils::handle_empty_list("tags");
+            crate::utils::error::handle_flow(crate::utils::error::FlowResult::EmptyList {
+                item_type: "tags".to_string(),
+            });
             return Ok(());
         }
 
@@ -393,9 +397,11 @@ impl DisplayFormatter {
     }
 
     /// Print categories list
-    pub fn print_categories(categories: &[String]) -> Result<()> {
+    pub fn print_categories(categories: &[String]) -> AppResult<()> {
         if categories.is_empty() {
-            crate::utils::handle_empty_list("categories");
+            crate::utils::error::handle_flow(crate::utils::error::FlowResult::EmptyList {
+                item_type: "categories".to_string(),
+            });
             return Ok(());
         }
 
@@ -500,9 +506,9 @@ impl DisplayFormatter {
     }
 
     /// Print JSON format
-    fn print_json_list(prompts: &[Prompt]) -> Result<()> {
+    fn print_json_list(prompts: &[Prompt]) -> AppResult<()> {
         let json = serde_json::to_string_pretty(prompts)
-            .map_err(|e| anyhow::anyhow!("Failed to serialize prompts to JSON: {}", e))?;
+            .map_err(|e| AppError::System(format!("Failed to serialize prompts to JSON: {}", e)))?;
         println!("{}", json);
         Ok(())
     }

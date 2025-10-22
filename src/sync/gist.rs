@@ -1,6 +1,6 @@
 use super::{RemoteSnippet, SyncClient, get_github_token};
 use crate::config::GistConfig;
-use anyhow::{Context, Result, anyhow};
+use crate::utils::error::{AppResult, AppError};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use reqwest::Client;
@@ -53,34 +53,34 @@ pub struct GistClient {
 }
 
 impl GistClient {
-    pub fn new(config: GistConfig) -> Result<Self> {
+    pub fn new(config: GistConfig) -> AppResult<Self> {
         // Try to get access token from config first, then environment
         let access_token = config.access_token
             .clone()
             .or_else(get_github_token)
             .ok_or_else(|| {
-                anyhow!("GitHub access token not found. Set it in config or use PROMPTHEUS_GITHUB_ACCESS_TOKEN environment variable")
+                AppError::System("GitHub access token not found. Set it in config or use PROMPTHEUS_GITHUB_ACCESS_TOKEN environment variable".to_string())
             })?;
 
         Ok(Self {
             client: Client::builder()
                 .user_agent("promptheus/0.1.0")
                 .build()
-                .context("Failed to create HTTP client")?,
+                .map_err(|e| AppError::Network(format!("Failed to create HTTP client: {}", e)))?,
             config,
             access_token,
         })
     }
 
-    fn parse_gist_timestamp(&self, timestamp_str: &str) -> Result<DateTime<Utc>> {
+    fn parse_gist_timestamp(&self, timestamp_str: &str) -> AppResult<DateTime<Utc>> {
         let parsed = DateTime::parse_from_rfc3339(timestamp_str)
-            .context("Failed to parse gist timestamp")?;
+            .map_err(|e| AppError::System(format!("Failed to parse gist timestamp: {}", e)))?;
         Ok(parsed.with_timezone(&Utc))
     }
 
-    async fn get_gist(&self) -> Result<Gist> {
+    async fn get_gist(&self) -> AppResult<Gist> {
         let gist_id = self.config.gist_id.as_ref()
-            .ok_or_else(|| anyhow!("No Gist ID configured"))?;
+            .ok_or_else(|| AppError::Sync("No Gist ID configured".to_string()))?;
 
         let url = format!("{}/gists/{}", GITHUB_API_BASE, gist_id);
 
@@ -89,21 +89,21 @@ impl GistClient {
             .bearer_auth(&self.access_token)
             .send()
             .await
-            .context("Failed to fetch gist from GitHub")?;
+            .map_err(|e| AppError::Network(format!("Failed to fetch gist from GitHub: {}", e)))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(anyhow!("Failed to get gist: {} - {}", status, error_text));
+            return Err(AppError::Network(format!("Failed to get gist: {} - {}", status, error_text)));
         }
 
         let gist: Gist = response.json().await
-            .context("Failed to parse gist response")?;
+            .map_err(|e| AppError::Network(format!("Failed to parse gist response: {}", e)))?;
 
         Ok(gist)
     }
 
-    async fn create_gist(&self, content: String) -> Result<String> {
+    async fn create_gist(&self, content: String) -> AppResult<String> {
         let url = format!("{}/gists", GITHUB_API_BASE);
 
         let mut files = HashMap::new();
@@ -124,23 +124,23 @@ impl GistClient {
             .json(&request)
             .send()
             .await
-            .context("Failed to create gist")?;
+            .map_err(|e| AppError::Network(format!("Failed to create gist: {}", e)))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(anyhow!("Failed to create gist: {} - {}", status, error_text));
+            return Err(AppError::Network(format!("Failed to create gist: {} - {}", status, error_text)));
         }
 
         let gist: Gist = response.json().await
-            .context("Failed to parse create gist response")?;
+            .map_err(|e| AppError::Network(format!("Failed to parse create gist response: {}", e)))?;
 
         Ok(gist.id)
     }
 
-    async fn update_gist(&self, content: String) -> Result<()> {
+    async fn update_gist(&self, content: String) -> AppResult<()> {
         let gist_id = self.config.gist_id.as_ref()
-            .ok_or_else(|| anyhow!("No Gist ID configured"))?;
+            .ok_or_else(|| AppError::Sync("No Gist ID configured".to_string()))?;
 
         let url = format!("{}/gists/{}", GITHUB_API_BASE, gist_id);
 
@@ -161,26 +161,26 @@ impl GistClient {
             .json(&request)
             .send()
             .await
-            .context("Failed to update gist")?;
+            .map_err(|e| AppError::Network(format!("Failed to update gist: {}", e)))?;
 
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(anyhow!("Failed to update gist: {} - {}", status, error_text));
+            return Err(AppError::Network(format!("Failed to update gist: {} - {}", status, error_text)));
         }
 
         Ok(())
     }
 
-    async fn get_gist_content(&self) -> Result<(String, DateTime<Utc>)> {
+    async fn get_gist_content(&self) -> AppResult<(String, DateTime<Utc>)> {
         let gist = self.get_gist().await?;
 
         // Find the target file
         let gist_file = gist.files.get(&self.config.file_name)
-            .ok_or_else(|| anyhow!("File '{}' not found in gist", self.config.file_name))?;
+            .ok_or_else(|| AppError::Sync(format!("File '{}' not found in gist", self.config.file_name)))?;
 
         let content = gist_file.content.as_ref()
-            .ok_or_else(|| anyhow!("File content is empty"))?
+            .ok_or_else(|| AppError::Sync("File content is empty".to_string()))?
             .clone();
 
         let updated_at = self.parse_gist_timestamp(&gist.updated_at)?;
@@ -191,7 +191,7 @@ impl GistClient {
 
 #[async_trait]
 impl SyncClient for GistClient {
-    async fn get_remote(&self) -> Result<RemoteSnippet> {
+    async fn get_remote(&self) -> AppResult<RemoteSnippet> {
         let (content, updated_at) = self.get_gist_content().await?;
         Ok(RemoteSnippet {
             content,
@@ -199,7 +199,7 @@ impl SyncClient for GistClient {
         })
     }
 
-    async fn upload(&self, content: String) -> Result<()> {
+    async fn upload(&self, content: String) -> AppResult<()> {
         if self.config.gist_id.is_none() {
             // Create new gist
             let gist_id = self.create_gist(content).await?;

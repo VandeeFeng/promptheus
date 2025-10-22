@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::utils::error::{AppResult, AppError};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, EnableBracketedPaste, DisableBracketedPaste},
     execute,
@@ -14,7 +14,7 @@ use crate::utils::output::OutputStyle;
 #[derive(Debug)]
 pub enum InteractiveError {
     /// System-level errors (terminal, IO, etc.)
-    SystemError(anyhow::Error),
+    SystemError(AppError),
     /// User cancelled the operation
     Cancelled,
 }
@@ -33,13 +33,13 @@ impl std::error::Error for InteractiveError {}
 /// Convert system errors to InteractiveError
 impl From<io::Error> for InteractiveError {
     fn from(err: io::Error) -> Self {
-        InteractiveError::SystemError(anyhow::anyhow!("IO error: {}", err))
+        InteractiveError::SystemError(AppError::Io(err.to_string()))
     }
 }
 
-/// Convert anyhow errors to InteractiveError
-impl From<anyhow::Error> for InteractiveError {
-    fn from(err: anyhow::Error) -> Self {
+/// Convert AppError to InteractiveError
+impl From<AppError> for InteractiveError {
+    fn from(err: AppError) -> Self {
         InteractiveError::SystemError(err)
     }
 }
@@ -49,13 +49,15 @@ struct RawModeGuard {
 }
 
 impl RawModeGuard {
-    fn new() -> Result<Self> {
-        terminal::enable_raw_mode()?;
+    fn new() -> AppResult<Self> {
+        terminal::enable_raw_mode()
+            .map_err(|e| AppError::System(format!("Failed to enable raw mode: {}", e)))?;
         Ok(RawModeGuard { bracketed_paste: false })
     }
 
-    fn with_bracketed_paste() -> Result<Self> {
-        terminal::enable_raw_mode()?;
+    fn with_bracketed_paste() -> AppResult<Self> {
+        terminal::enable_raw_mode()
+            .map_err(|e| AppError::System(format!("Failed to enable raw mode: {}", e)))?;
         let _ = execute!(io::stdout(), EnableBracketedPaste);
         Ok(RawModeGuard { bracketed_paste: true })
     }
@@ -67,45 +69,45 @@ impl RawModeGuard {
     }
 
     /// Clear current line and move cursor to beginning
-    fn clear_line(&self) -> Result<()> {
+    fn clear_line(&self) -> AppResult<()> {
         execute!(
             io::stdout(),
             cursor::MoveToColumn(0),
             terminal::Clear(ClearType::CurrentLine)
-        )?;
-        io::stdout().flush()?;
+        ).map_err(|e| AppError::Io(e.to_string()))?;
+        io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
         Ok(())
     }
 
     /// Print text and flush output
-    fn print_and_flush(&self, text: &str) -> Result<()> {
-        execute!(io::stdout(), style::Print(text))?;
-        io::stdout().flush()?;
+    fn print_and_flush(&self, text: &str) -> AppResult<()> {
+        execute!(io::stdout(), style::Print(text)).map_err(|e| AppError::Io(e.to_string()))?;
+        io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
         Ok(())
     }
 
     /// Print formatted line with prompt and content
-    fn print_line(&self, prompt: &str, content: &str, suggestion: Option<&str>) -> Result<()> {
+    fn print_line(&self, prompt: &str, content: &str, suggestion: Option<&str>) -> AppResult<()> {
         self.clear_line()?;
         execute!(
             io::stdout(),
             style::Print(prompt),
             style::Print(content)
-        )?;
+        ).map_err(|e| AppError::Io(e.to_string()))?;
 
         if let Some(suggestion) = suggestion {
-            execute!(io::stdout(), style::Print(OutputStyle::muted(suggestion)))?;
+            execute!(io::stdout(), style::Print(OutputStyle::muted(suggestion))).map_err(|e| AppError::Io(e.to_string()))?;
         }
 
-        io::stdout().flush()?;
+        io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
         Ok(())
     }
 
     /// Move cursor left by specified positions
-    fn move_cursor_left(&self, positions: u16) -> Result<()> {
+    fn move_cursor_left(&self, positions: u16) -> AppResult<()> {
         if positions > 0 {
-            execute!(io::stdout(), cursor::MoveLeft(positions))?;
-            io::stdout().flush()?;
+            execute!(io::stdout(), cursor::MoveLeft(positions)).map_err(|e| AppError::Io(e.to_string()))?;
+            io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
         }
         Ok(())
     }
@@ -145,12 +147,12 @@ pub fn detect_editor(editor_cmd: Option<&str>) -> String {
         })
 }
 
-pub fn prompt_input(prompt: &str) -> Result<String> {
+pub fn prompt_input(prompt: &str) -> AppResult<String> {
     print!("{}", prompt);
-    io::stdout().flush()?;
+    io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
 
     let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
+    io::stdin().read_line(&mut input).map_err(|e| AppError::Io(e.to_string()))?;
 
     // Ensure proper newline after input
     println!();
@@ -163,7 +165,7 @@ fn handle_interactive_result<T>(result: Result<T, InteractiveError>) -> Option<T
     match result {
         Ok(value) => Some(value),
         Err(InteractiveError::Cancelled) => {
-            crate::utils::error::print_cancelled("Operation cancelled by user");
+            crate::utils::error::handle_flow(crate::utils::error::FlowResult::Cancelled("Operation cancelled by user".to_string()));
             None
         }
         Err(InteractiveError::SystemError(e)) => {
@@ -188,14 +190,14 @@ fn find_autocomplete_suggestion(input: &str, suggestions: &[String]) -> String {
 /// Internal version that properly propagates system errors
 fn prompt_input_with_autocomplete_internal(prompt: &str, suggestions: &[String]) -> Result<String, InteractiveError> {
     print!("{}", prompt);
-    io::stdout().flush()?;
+    io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
 
     let guard = RawModeGuard::new()?;
     let mut input = String::new();
     let mut current_suggestion = String::new();
 
     loop {
-        let event = event::read()?; // Propagate terminal errors properly
+        let event = event::read().map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?; // Propagate terminal errors properly
         match event {
             Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => {
                 input.push(c);
@@ -263,7 +265,7 @@ fn prompt_multiline_internal(prompt: &str) -> Result<String, InteractiveError> {
     let mut current_line = String::new();
 
     loop {
-        let event = event::read()?; // Propagate terminal errors properly
+        let event = event::read().map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?; // Propagate terminal errors properly
         match event {
             Event::Key(KeyEvent {
                 code: KeyCode::Char('j'), modifiers: event::KeyModifiers::CONTROL, ..
@@ -289,16 +291,16 @@ fn prompt_multiline_internal(prompt: &str) -> Result<String, InteractiveError> {
             Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) => {
                 if !current_line.is_empty() {
                     current_line.pop();
-                    execute!(io::stdout(), cursor::MoveLeft(1), terminal::Clear(ClearType::UntilNewLine))?;
-                    io::stdout().flush()?;
+                    execute!(io::stdout(), cursor::MoveLeft(1), terminal::Clear(ClearType::UntilNewLine)).map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?;
+                    io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
                 } else if !lines.is_empty() {
                     current_line = lines.pop().unwrap();
-                    execute!(io::stdout(), cursor::MoveUp(1), cursor::MoveToColumn(1), terminal::Clear(ClearType::UntilNewLine))?;
+                    execute!(io::stdout(), cursor::MoveUp(1), cursor::MoveToColumn(1), terminal::Clear(ClearType::UntilNewLine)).map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?;
                     print!("{}", current_line);
                     for _ in 0..current_line.len() {
-                        execute!(io::stdout(), cursor::MoveLeft(1))?;
+                        execute!(io::stdout(), cursor::MoveLeft(1)).map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?;
                     }
-                    io::stdout().flush()?;
+                    io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
                 }
             }
             Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
@@ -334,7 +336,7 @@ pub fn prompt_multiline(prompt: &str) -> Option<String> {
     handle_interactive_result(prompt_multiline_internal(prompt))
 }
 
-pub fn prompt_yes_no(prompt: &str) -> Result<bool> {
+pub fn prompt_yes_no(prompt: &str) -> AppResult<bool> {
     loop {
         let input = prompt_input(&format!("{} [y/N]: ", prompt))?;
         match input.to_lowercase().as_str() {
@@ -351,15 +353,15 @@ pub fn open_editor_custom(
     content: Option<&str>,
     line: Option<u32>,
     editor_cmd: Option<&str>
-) -> Result<String> {
+) -> AppResult<String> {
     let editor = detect_editor(editor_cmd);
 
     let temp_file = std::env::temp_dir().join(format!("promptheus_{}.tmp", std::process::id()));
 
     if let Some(content) = content {
-        std::fs::write(&temp_file, content)?;
+        std::fs::write(&temp_file, content).map_err(|e| AppError::Io(e.to_string()))?;
     } else {
-        std::fs::File::create(&temp_file)?;
+        std::fs::File::create(&temp_file).map_err(|e| AppError::Io(e.to_string()))?;
     }
 
     let mut cmd = Command::new(&editor);
@@ -378,14 +380,14 @@ pub fn open_editor_custom(
                 cmd.arg(format!("{}:{}", temp_file.display(), line_num));
                 // For VS Code, we don't need to add the file separately
                 let status = cmd.status()
-                    .with_context(|| format!("Failed to execute editor: {}", editor))?;
+                    .map_err(|e| AppError::System(format!("Failed to execute editor: {}", e)))?;
 
                 if !status.success() {
-                    return Err(anyhow::anyhow!("Editor exited with non-zero status"));
+                    return Err(AppError::System("Editor exited with non-zero status".to_string()));
                 }
 
-                let content = std::fs::read_to_string(&temp_file)?;
-                std::fs::remove_file(&temp_file)?;
+                let content = std::fs::read_to_string(&temp_file).map_err(|e| AppError::Io(e.to_string()))?;
+                std::fs::remove_file(&temp_file).map_err(|e| AppError::Io(e.to_string()))?;
                 return Ok(content.trim().to_string());
             }
             _ => {
@@ -398,14 +400,14 @@ pub fn open_editor_custom(
     cmd.arg(&temp_file);
 
     let status = cmd.status()
-        .with_context(|| format!("Failed to execute editor: {}", editor))?;
+        .map_err(|e| AppError::System(format!("Failed to execute editor: {}: {}", editor, e)))?;
 
     if !status.success() {
-        return Err(anyhow::anyhow!("Editor exited with non-zero status"));
+        return Err(AppError::System("Editor exited with non-zero status".to_string()));
     }
 
-    let content = std::fs::read_to_string(&temp_file)?;
-    std::fs::remove_file(&temp_file)?;
+    let content = std::fs::read_to_string(&temp_file).map_err(|e| AppError::Io(e.to_string()))?;
+    std::fs::remove_file(&temp_file).map_err(|e| AppError::Io(e.to_string()))?;
 
     Ok(content.trim().to_string())
 }
@@ -415,7 +417,7 @@ pub fn edit_file_direct(
     file_path: &std::path::Path,
     line: Option<u32>,
     editor_cmd: Option<&str>
-) -> Result<()> {
+) -> AppResult<()> {
     let editor = detect_editor(editor_cmd);
 
     let mut cmd = Command::new(&editor);
@@ -434,10 +436,10 @@ pub fn edit_file_direct(
                 cmd.arg(format!("{}:{}", file_path.display(), line_num));
                 // For VS Code, this is sufficient
                 let status = cmd.status()
-                    .with_context(|| format!("Failed to execute editor: {}", editor))?;
+                    .map_err(|e| AppError::System(format!("Failed to execute editor: {}", e)))?;
 
                 if !status.success() {
-                    return Err(anyhow::anyhow!("Editor exited with non-zero status"));
+                    return Err(AppError::System("Editor exited with non-zero status".to_string()));
                 }
                 return Ok(());
             }
@@ -450,10 +452,10 @@ pub fn edit_file_direct(
     cmd.arg(file_path);
 
     let status = cmd.status()
-        .with_context(|| format!("Failed to execute editor: {}", editor))?;
+        .map_err(|e| AppError::System(format!("Failed to execute editor: {}: {}", editor, e)))?;
 
     if !status.success() {
-        return Err(anyhow::anyhow!("Editor exited with non-zero status"));
+        return Err(AppError::System("Editor exited with non-zero status".to_string()));
     }
 
     Ok(())
@@ -496,7 +498,7 @@ fn command_exists(cmd: &str) -> bool {
         .is_ok()
 }
 
-pub fn copy_to_clipboard(text: &str) -> Result<()> {
+pub fn copy_to_clipboard(text: &str) -> AppResult<()> {
     use std::io::Write;
 
     #[cfg(target_os = "macos")]
@@ -504,18 +506,18 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
         let mut child = Command::new("pbcopy")
             .stdin(std::process::Stdio::piped())
             .spawn()
-            .context("Failed to spawn pbcopy")?;
+            .map_err(|e| AppError::System(format!("Failed to spawn pbcopy: {}", e)))?;
 
         if let Some(stdin) = child.stdin.as_mut() {
             stdin.write_all(text.as_bytes())
-                .context("Failed to write to pbcopy")?;
+                .map_err(|e| AppError::System(format!("Failed to write to pbcopy: {}", e)))?;
         }
 
         let status = child.wait()
-            .context("Failed to wait for pbcopy")?;
+            .map_err(|e| AppError::System(format!("Failed to wait for pbcopy: {}", e)))?;
 
         if !status.success() {
-            return Err(anyhow::anyhow!("pbcopy failed"));
+            return Err(AppError::System("pbcopy failed".to_string()));
         }
     }
 
@@ -564,17 +566,17 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
                 {
                     if let Some(stdin) = child.stdin.as_mut()
                         && let Err(e) = stdin.write_all(text.as_bytes()) {
-                            last_error = Some(anyhow::anyhow!("Failed to write to {}: {}", tool, e));
+                            last_error = Some(AppError::System(format!("Failed to write to {}: {}", tool, e)));
                             continue;
                         }
 
                     match child.wait() {
                         Ok(status) if status.success() => return Ok(()),
-                        Ok(_) => last_error = Some(anyhow::anyhow!("{} failed", tool)),
-                        Err(e) => last_error = Some(anyhow::anyhow!("Failed to wait for {}: {}", tool, e)),
+                        Ok(_) => last_error = Some(AppError::System(format!("{} failed", tool))),
+                        Err(e) => last_error = Some(AppError::System(format!("Failed to wait for {}: {}", tool, e))),
                     }
                 } else {
-                    last_error = Some(anyhow::anyhow!("Failed to spawn {}", tool));
+                    last_error = Some(AppError::System(format!("Failed to spawn {}", tool)));
                 }
             }
         }
@@ -583,18 +585,18 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
         if available_tools.is_empty() {
             match display_server {
                 DisplayServer::Wayland => {
-                    return Err(anyhow::anyhow!(
-                        "No clipboard tools found. Please install wl-clipboard:\n  sudo pacman -S wl-clipboard  # Arch\n  sudo apt install wl-clipboard  # Ubuntu/Debian"
+                    return Err(AppError::System(
+                        "No clipboard tools found. Please install wl-clipboard:\n  sudo pacman -S wl-clipboard  # Arch\n  sudo apt install wl-clipboard  # Ubuntu/Debian".to_string()
                     ));
                 }
                 DisplayServer::X11 => {
-                    return Err(anyhow::anyhow!(
-                        "No clipboard tools found. Please install one of:\n  sudo pacman -S xclip  # Arch\n  sudo apt install xclip  # Ubuntu/Debian"
+                    return Err(AppError::System(
+                        "No clipboard tools found. Please install one of:\n  sudo pacman -S xclip  # Arch\n  sudo apt install xclip  # Ubuntu/Debian".to_string()
                     ));
                 }
                 DisplayServer::Unknown => {
-                    return Err(anyhow::anyhow!(
-                        "No clipboard tools found. Please install:\n  sudo pacman -S wl-clipboard xclip  # Arch\n  sudo apt install wl-clipboard xclip  # Ubuntu/Debian"
+                    return Err(AppError::System(
+                        "No clipboard tools found. Please install:\n  sudo pacman -S wl-clipboard xclip  # Arch\n  sudo apt install wl-clipboard xclip  # Ubuntu/Debian".to_string()
                     ));
                 }
             }
@@ -603,7 +605,7 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
         if let Some(error) = last_error {
             return Err(error);
         }
-        return Err(anyhow::anyhow!("All available clipboard tools failed"));
+        return Err(AppError::System("All available clipboard tools failed".to_string()));
     }
 
     #[cfg(target_os = "windows")]
@@ -611,24 +613,24 @@ pub fn copy_to_clipboard(text: &str) -> Result<()> {
         let mut child = Command::new("clip")
             .stdin(std::process::Stdio::piped())
             .spawn()
-            .context("Failed to spawn clip")?;
+            .map_err(|e| AppError::System(format!("Failed to spawn clip: {}", e)))?;
 
         if let Some(stdin) = child.stdin.as_mut() {
             stdin.write_all(text.as_bytes())
-                .context("Failed to write to clip")?;
+                .map_err(|e| AppError::System(format!("Failed to write to clip: {}", e)))?;
         }
 
         let status = child.wait()
-            .context("Failed to wait for clip")?;
+            .map_err(|e| AppError::System(format!("Failed to wait for clip: {}", e)))?;
 
         if !status.success() {
-            return Err(anyhow::anyhow!("clip failed"));
+            return Err(AppError::System("clip failed"));
         }
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
-        return Err(anyhow::anyhow!("Clipboard not supported on this platform"));
+        return Err(AppError::System("Clipboard not supported on this platform"));
     }
 
     // This line should never be reached due to the platform-specific returns above
@@ -678,7 +680,7 @@ pub fn replace_command_variables(
 /// Prompt user for variable values interactively
 pub fn prompt_for_variables(
     variables: Vec<(String, Option<String>)>
-) -> Result<std::collections::HashMap<String, String>> {
+) -> AppResult<std::collections::HashMap<String, String>> {
     let mut result = std::collections::HashMap::new();
 
     for (name, default) in variables {

@@ -1,9 +1,9 @@
-use anyhow::{Result, Context};
+use crate::utils::error::{AppResult, AppError};
 use serde_json;
 
-pub fn generate_html(prompts: &[crate::core::data::Prompt]) -> Result<String> {
+pub fn generate_html(prompts: &[crate::core::data::Prompt]) -> AppResult<String> {
     let prompts_json = serde_json::to_string(prompts)
-        .context("Failed to serialize prompts to JSON")?;
+        .map_err(|e| AppError::System(format!("Failed to serialize prompts to JSON: {}", e)))?;
 
     let html = format!(r#"
 <!DOCTYPE html>
@@ -712,26 +712,29 @@ pub fn generate_html(prompts: &[crate::core::data::Prompt]) -> Result<String> {
     Ok(html)
 }
 
-pub fn open_browser(path: &str) -> Result<()> {
+pub fn open_browser(path: &str) -> AppResult<()> {
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new("cmd")
             .args(["/C", "start", path])
-            .spawn()?;
+            .spawn()
+            .map_err(|e| AppError::System(format!("Failed to open browser: {}", e)))?;
     }
 
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
             .arg(path)
-            .spawn()?;
+            .spawn()
+            .map_err(|e| AppError::System(format!("Failed to open browser: {}", e)))?;
     }
 
     #[cfg(target_os = "linux")]
     {
         std::process::Command::new("xdg-open")
             .arg(path)
-            .spawn()?;
+            .spawn()
+            .map_err(|e| AppError::System(format!("Failed to open browser: {}", e)))?;
     }
 
     Ok(())

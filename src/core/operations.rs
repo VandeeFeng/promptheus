@@ -3,13 +3,13 @@
 //! This module provides the main implementation of all core traits,
 //! serving as the central hub for prompt management operations.
 
-use anyhow::{Context, Result};
 use crate::core::{
     data::{Prompt, PromptCollection, PromptStats},
     traits::{PromptStorage, PromptSearch, PromptDisplay, PromptInteraction, PromptCrud},
 };
 use crate::config::Config;
 use crate::cli::ListFormat;
+use crate::utils::error::{AppResult, AppError};
 use crate::utils::{
     search::{SearchEngine, interactive_search_with_external_tool},
     stats::StatsCalculator,
@@ -37,7 +37,7 @@ impl PromptOperations {
     }
 
     /// Load prompts with proper error handling and ID generation
-    fn load_prompts_with_ids(&self) -> Result<PromptCollection> {
+    fn load_prompts_with_ids(&self) -> AppResult<PromptCollection> {
         self.ensure_storage_exists()?;
 
         let collection = self.load_prompts()?;
@@ -55,12 +55,12 @@ impl PromptOperations {
     }
 
     /// Save prompts with error handling
-    fn save_prompts_internal(&self, collection: &PromptCollection) -> Result<()> {
+    fn save_prompts_internal(&self, collection: &PromptCollection) -> AppResult<()> {
         let content = toml::to_string_pretty(collection)
-            .with_context(|| "Failed to serialize prompt collection")?;
+            .map_err(|e| AppError::System(format!("Failed to serialize prompt collection: {}", e)))?;
 
         std::fs::write(&self.config.general.prompt_file, content)
-            .with_context(|| format!("Failed to write prompt file: {}", self.config.general.prompt_file.display()))?;
+            .map_err(|e| AppError::Io(format!("Failed to write prompt file: {}: {}", self.config.general.prompt_file.display(), e)))?;
 
         Ok(())
     }
@@ -71,7 +71,7 @@ impl PromptOperations {
         query: Option<&str>,
         tag: Option<&str>,
         category: Option<&str>,
-    ) -> Result<Vec<(Prompt, String)>> {
+    ) -> AppResult<Vec<(Prompt, String)>> {
         let collection = self.load_prompts_with_ids()?;
         Ok(SearchEngine::format_for_selection(&collection, query, tag, category, &self.config))
     }
@@ -87,18 +87,20 @@ impl PromptOperations {
         query: Option<&str>,
         tag: Option<&str>,
         category: Option<&str>,
-    ) -> Result<Vec<(Prompt, String)>> {
+    ) -> AppResult<Vec<(Prompt, String)>> {
         self.format_for_selection(query, tag, category)
     }
 
-    pub fn get_all_prompts(&self) -> Result<Vec<Prompt>> {
+    pub fn get_all_prompts(&self) -> AppResult<Vec<Prompt>> {
         self.search_prompts(None, None)
     }
 
-    pub fn get_all_prompts_or_return_empty(&self) -> Result<Vec<Prompt>> {
+    pub fn get_all_prompts_or_return_empty(&self) -> AppResult<Vec<Prompt>> {
         let prompts = self.get_all_prompts()?;
         if prompts.is_empty() {
-            crate::utils::handle_empty_list("prompts");
+            crate::utils::error::handle_flow(crate::utils::error::FlowResult::EmptyList {
+                item_type: "prompts".to_string(),
+            });
         }
         Ok(prompts)
     }
@@ -106,9 +108,9 @@ impl PromptOperations {
 
 // Implement PromptStorage trait
 impl PromptStorage for PromptOperations {
-    fn load_prompts(&self) -> Result<PromptCollection> {
+    fn load_prompts(&self) -> AppResult<PromptCollection> {
         let content = std::fs::read_to_string(&self.config.general.prompt_file)
-            .with_context(|| format!("Failed to read prompt file: {}", self.config.general.prompt_file.display()))?;
+            .map_err(|e| AppError::Io(format!("Failed to read prompt file: {}: {}", self.config.general.prompt_file.display(), e)))?;
 
         // Handle empty or invalid TOML files
         if content.trim().is_empty() {
@@ -118,28 +120,28 @@ impl PromptStorage for PromptOperations {
         }
 
         let collection: PromptCollection = toml::from_str(&content)
-            .with_context(|| "Failed to parse prompt file")?;
+            .map_err(|e| AppError::System(format!("Failed to parse prompt file: {}", e)))?;
 
         Ok(collection)
     }
 
-    fn save_prompts(&self, collection: &PromptCollection) -> Result<()> {
+    fn save_prompts(&self, collection: &PromptCollection) -> AppResult<()> {
         self.save_prompts_internal(collection)
     }
 
-    fn ensure_storage_exists(&self) -> Result<()> {
+    fn ensure_storage_exists(&self) -> AppResult<()> {
         if !self.config.general.prompt_file.exists() {
             if let Some(parent) = self.config.general.prompt_file.parent() {
                 std::fs::create_dir_all(parent)
-                    .with_context(|| format!("Failed to create prompt directory: {}", parent.display()))?;
+                    .map_err(|e| AppError::Io(format!("Failed to create prompt directory: {}: {}", parent.display(), e)))?;
             }
 
             let default_collection = PromptCollection::default();
             let content = toml::to_string_pretty(&default_collection)
-                .with_context(|| "Failed to create default prompt collection")?;
+                .map_err(|e| AppError::System(format!("Failed to create default prompt collection: {}", e)))?;
 
             std::fs::write(&self.config.general.prompt_file, content)
-                .with_context(|| format!("Failed to create prompt file: {}", self.config.general.prompt_file.display()))?;
+                .map_err(|e| AppError::Io(format!("Failed to create prompt file: {}: {}", self.config.general.prompt_file.display(), e)))?;
         }
 
         Ok(())
@@ -148,27 +150,27 @@ impl PromptStorage for PromptOperations {
 
 // Implement PromptSearch trait
 impl PromptSearch for PromptOperations {
-    fn search_prompts(&self, query: Option<&str>, tag: Option<&str>) -> Result<Vec<Prompt>> {
+    fn search_prompts(&self, query: Option<&str>, tag: Option<&str>) -> AppResult<Vec<Prompt>> {
         let collection = self.load_prompts_with_ids()?;
         Ok(collection.search(query, tag, &self.config))
     }
 
-    fn find_prompt(&self, identifier: &str) -> Result<Option<Prompt>> {
+    fn find_prompt(&self, identifier: &str) -> AppResult<Option<Prompt>> {
         let collection = self.load_prompts_with_ids()?;
         Ok(collection.find(identifier).cloned())
     }
 
-    fn get_all_tags(&self) -> Result<Vec<String>> {
+    fn get_all_tags(&self) -> AppResult<Vec<String>> {
         let collection = self.load_prompts_with_ids()?;
         Ok(collection.get_all_tags())
     }
 
-    fn get_categories(&self) -> Result<Vec<String>> {
+    fn get_categories(&self) -> AppResult<Vec<String>> {
         let collection = self.load_prompts_with_ids()?;
         Ok(collection.get_categories())
     }
 
-    fn get_prompt_stats(&self) -> Result<PromptStats> {
+    fn get_prompt_stats(&self) -> AppResult<PromptStats> {
         let collection = self.load_prompts_with_ids()?;
         Ok(collection.get_stats())
     }
@@ -176,7 +178,7 @@ impl PromptSearch for PromptOperations {
 
 // Implement PromptDisplay trait
 impl PromptDisplay for PromptOperations {
-    fn format_list(&self, prompts: &[Prompt], format: &ListFormat) -> Result<()> {
+    fn format_list(&self, prompts: &[Prompt], format: &ListFormat) -> AppResult<()> {
         DisplayFormatter::format_list(prompts, format, &self.config)
     }
 
@@ -184,23 +186,23 @@ impl PromptDisplay for PromptOperations {
         crate::utils::output::OutputStyle::format_prompt_for_selection(prompt, &self.config)
     }
 
-    fn print_stats(&self, stats: &PromptStats) -> Result<()> {
+    fn print_stats(&self, stats: &PromptStats) -> AppResult<()> {
         StatsCalculator::print_stats(stats);
         Ok(())
     }
 
-    fn print_tags(&self, tags: &[String]) -> Result<()> {
+    fn print_tags(&self, tags: &[String]) -> AppResult<()> {
         DisplayFormatter::print_tags(tags)
     }
 
-    fn print_categories(&self, categories: &[String]) -> Result<()> {
+    fn print_categories(&self, categories: &[String]) -> AppResult<()> {
         DisplayFormatter::print_categories(categories)
     }
 }
 
 // Implement PromptInteraction trait
 impl PromptInteraction for PromptOperations {
-    fn execute_prompt(&self, prompt: &Prompt, copy_to_clipboard: bool) -> Result<()> {
+    fn execute_prompt(&self, prompt: &Prompt, copy_to_clipboard: bool) -> AppResult<()> {
         use crate::utils::copy_to_clipboard as copy_fn;
 
         let variables = parse_command_variables(&prompt.content);
@@ -226,7 +228,7 @@ impl PromptInteraction for PromptOperations {
         Ok(())
     }
 
-    fn select_interactive_prompts(&self, prompts: Vec<Prompt>) -> Result<Option<Prompt>> {
+    fn select_interactive_prompts(&self, prompts: Vec<Prompt>) -> AppResult<Option<Prompt>> {
         if prompts.is_empty() {
             return Ok(None);
         }
@@ -254,16 +256,16 @@ impl PromptInteraction for PromptOperations {
 
 // Implement PromptCrud trait
 impl PromptCrud for PromptOperations {
-    fn add_prompt(&self, prompt: Prompt) -> Result<()> {
+    fn add_prompt(&self, prompt: Prompt) -> AppResult<()> {
         let mut collection = self.load_prompts_with_ids()?;
         collection.add_prompt(prompt);
         self.save_prompts(&collection)
     }
 
-    fn delete_prompt(&self, id: &str) -> Result<()> {
+    fn delete_prompt(&self, id: &str) -> AppResult<()> {
         let mut collection = self.load_prompts_with_ids()?;
         collection.delete_prompt(id)
-            .ok_or_else(|| anyhow::anyhow!("Prompt with ID '{}' not found", id))?;
+            .ok_or_else(|| AppError::System(format!("Prompt with ID '{}' not found", id)))?;
         self.save_prompts(&collection)
     }
 }

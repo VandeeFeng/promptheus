@@ -70,9 +70,9 @@ impl Prompt {
             self.tag = Some(vec![tag]);
         } else if let Some(ref mut tags) = self.tag
             && !tags.contains(&tag) {
-            tags.push(tag);
-            self.updated_at = Utc::now();
-        }
+                tags.push(tag);
+                self.updated_at = Utc::now();
+            }
     }
 }
 
@@ -90,10 +90,17 @@ impl PromptCollection {
         self.prompts.push(prompt);
     }
 
-    /// Delete a prompt by ID
-    pub fn delete_prompt(&mut self, id: &str) -> Option<Prompt> {
-        let index = self.prompts.iter().position(|p| p.id.as_ref() == Some(&id.to_string()))?;
-        Some(self.prompts.remove(index))
+    /// Delete a prompt by ID or description (smart delete)
+    pub fn delete_prompt(&mut self, identifier: &str) -> Option<Prompt> {
+        if let Some(prompt) = self.find_prompt(identifier) {
+            // Find the index of the found prompt to remove it
+            if let Some(index) = self.prompts.iter().position(|p| {
+                p.id == prompt.id && p.description == prompt.description
+            }) {
+                return Some(self.prompts.remove(index));
+            }
+        }
+        None
     }
 
     /// Find a prompt by ID
@@ -107,7 +114,7 @@ impl PromptCollection {
     }
 
     /// Find a prompt by ID or description
-    pub fn find(&self, identifier: &str) -> Option<&Prompt> {
+    pub fn find_prompt(&self, identifier: &str) -> Option<&Prompt> {
         if let Some(prompt) = self.find_by_id(identifier) {
             return Some(prompt);
         }

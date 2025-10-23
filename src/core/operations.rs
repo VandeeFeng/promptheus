@@ -16,6 +16,8 @@ use crate::utils::{
     output::DisplayFormatter,
     console::{parse_command_variables, prompt_for_variables, replace_command_variables},
 };
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 /// Main operations hub that implements all core traits
 ///
@@ -31,22 +33,30 @@ impl PromptOperations {
         Self { config: config.clone() }
     }
 
+    /// Generate deterministic ID based on description and created_at timestamp
+    fn generate_deterministic_id(description: &str, created_at: &chrono::DateTime<chrono::Utc>) -> String {
+        let input = format!("{}{}", description, created_at.to_rfc3339());
+        let mut hasher = DefaultHasher::new();
+        input.hash(&mut hasher);
+        format!("{:x}", hasher.finish())
+    }
+
     /// Get reference to the configuration
     pub fn config(&self) -> &Config {
         &self.config
     }
 
-    /// Load prompts with proper error handling and ID generation
+    /// Load prompts with proper error handling and deterministic ID generation
     fn load_prompts_with_ids(&self) -> AppResult<PromptCollection> {
         self.ensure_storage_exists()?;
 
         let collection = self.load_prompts()?;
 
-        // Ensure all prompts have IDs
+        // Ensure all prompts have deterministic IDs
         let mut prompts = Vec::new();
         for mut prompt in collection.prompts {
             if prompt.id.is_none() {
-                prompt.id = Some(uuid::Uuid::new_v4().to_string());
+                prompt.id = Some(Self::generate_deterministic_id(&prompt.description, &prompt.created_at));
             }
             prompts.push(prompt);
         }
@@ -157,7 +167,7 @@ impl PromptSearch for PromptOperations {
 
     fn find_prompt(&self, identifier: &str) -> AppResult<Option<Prompt>> {
         let collection = self.load_prompts_with_ids()?;
-        Ok(collection.find(identifier).cloned())
+        Ok(collection.find_prompt(identifier).cloned())
     }
 
     fn get_all_tags(&self) -> AppResult<Vec<String>> {

@@ -1,8 +1,8 @@
 pub mod gist;
 
 use crate::utils::error::AppResult;
-use chrono::{DateTime, Utc};
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]
 pub struct RemoteSnippet {
@@ -17,7 +17,11 @@ pub trait SyncClient {
 }
 
 /// Determine if sync should happen based on timestamps and force flag
-pub fn should_sync(local_updated: DateTime<Utc>, remote_updated: DateTime<Utc>, force: bool) -> SyncDirection {
+pub fn should_sync(
+    local_updated: DateTime<Utc>,
+    remote_updated: DateTime<Utc>,
+    force: bool,
+) -> SyncDirection {
     if force {
         return SyncDirection::Upload;
     }

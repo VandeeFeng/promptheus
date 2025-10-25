@@ -1,11 +1,12 @@
-use crate::utils::error::{AppResult, AppError};
+use crate::utils::error::{AppError, AppResult};
 use serde_json;
 
 pub fn generate_html(prompts: &[crate::core::data::Prompt]) -> AppResult<String> {
     let prompts_json = serde_json::to_string(prompts)
         .map_err(|e| AppError::System(format!("Failed to serialize prompts to JSON: {}", e)))?;
 
-    let html = format!(r#"
+    let html = format!(
+        r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -707,7 +708,8 @@ pub fn generate_html(prompts: &[crate::core::data::Prompt]) -> AppResult<String>
     </script>
 </body>
 </html>
-"#);
+"#
+    );
 
     Ok(html)
 }

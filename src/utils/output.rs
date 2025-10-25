@@ -1,9 +1,11 @@
-use colored::*;
-use crate::core::data::Prompt;
-use crate::utils::format::{format_datetime, format_tags_comma, format_tags_hash, format_category_info, truncate_string};
-use crate::config::Config;
 use crate::cli::ListFormat;
-use crate::utils::error::{AppResult, AppError};
+use crate::config::Config;
+use crate::core::data::Prompt;
+use crate::utils::error::{AppError, AppResult};
+use crate::utils::format::{
+    format_category_info, format_datetime, format_tags_comma, format_tags_hash, truncate_string,
+};
+use colored::*;
 
 /// Display components for a prompt, used for consistent formatting
 pub struct PromptDisplay {
@@ -104,8 +106,9 @@ impl OutputStyle {
                     Self::print_field_colored("ID", id, Self::muted);
                 }
             }
-            PromptField::Description =>
-                Self::print_field_colored("Description", &prompt.description, Self::content),
+            PromptField::Description => {
+                Self::print_field_colored("Description", &prompt.description, Self::content)
+            }
             PromptField::Category => {
                 let (cat_str, is_empty) = format_category_info(&prompt.category);
                 if is_empty {
@@ -122,8 +125,11 @@ impl OutputStyle {
                     Self::print_field_colored("Tags", &tags_str, Self::command);
                 }
             }
-            PromptField::Created =>
-                Self::print_field_colored("Created", &format_datetime(&prompt.created_at), Self::muted),
+            PromptField::Created => Self::print_field_colored(
+                "Created",
+                &format_datetime(&prompt.created_at),
+                Self::muted,
+            ),
         }
     }
 
@@ -139,7 +145,10 @@ impl OutputStyle {
     /// Print basic prompt metadata fields (Description, Created)
     pub fn print_prompt_metadata_basic(prompt: &Prompt) {
         println!("  Description: {}", Self::description(&prompt.description));
-        println!("  Created: {}", Self::muted(&format_datetime(&prompt.created_at)));
+        println!(
+            "  Created: {}",
+            Self::muted(&format_datetime(&prompt.created_at))
+        );
     }
 
     // Unified prompt display functions
@@ -204,10 +213,9 @@ impl OutputStyle {
     pub fn format_prompt_for_selection(prompt: &Prompt, config: &Config) -> String {
         let display = Self::build_prompt_display(prompt, config);
 
-        let first_line = format!("[{}]:{}{}",
-                                display.description,
-                                display.category_formatted,
-                                display.tags_formatted
+        let first_line = format!(
+            "[{}]:{}{}",
+            display.description, display.category_formatted, display.tags_formatted
         );
 
         if config.general.content_preview && !display.content_preview.is_empty() {
@@ -237,11 +245,12 @@ impl OutputStyle {
             Self::muted("[] ")
         };
 
-        format!("{}: {}{}{}",
-                Self::description(&display.description),
-                category_display,
-                display.tags_formatted,
-                Self::content(&content_display)
+        format!(
+            "{}: {}{}{}",
+            Self::description(&display.description),
+            category_display,
+            display.tags_formatted,
+            Self::content(&content_display)
         )
     }
 
@@ -250,7 +259,11 @@ impl OutputStyle {
         println!("\n🔧 {}:", Self::header("This prompt contains variables"));
         for (name, default) in variables {
             if let Some(default_val) = default {
-                println!("  <{}={}>", Self::command(&format!("<{}>", name)), Self::muted(default_val));
+                println!(
+                    "  <{}={}>",
+                    Self::command(&format!("<{}>", name)),
+                    Self::muted(default_val)
+                );
             } else {
                 println!("  {}", Self::command(&format!("<{}>", name)));
             }
@@ -284,8 +297,8 @@ impl OutputStyle {
 
     /// Ask user about pagination and display content accordingly
     pub fn ask_and_display_content(content: &str, title: &str) -> AppResult<()> {
+        use crate::utils::{get_terminal_size, paginate_static_content, should_paginate};
         use std::io::{self, Write};
-        use crate::utils::{get_terminal_size, should_paginate, paginate_static_content};
 
         // Check if content should be paginated
         let (_, terminal_height) = get_terminal_size().unwrap_or((24, 80));
@@ -303,10 +316,7 @@ impl OutputStyle {
             io::stdin().read_line(&mut input).unwrap();
 
             if input.trim().to_lowercase() == "y" || input.trim().to_lowercase() == "yes" {
-                let content_display = format!("\n{}:\n{}",
-                                              Self::title(title),
-                                              content
-                );
+                let content_display = format!("\n{}:\n{}", Self::title(title), content);
                 paginate_static_content(&content_display)?;
             }
         } else {
@@ -331,7 +341,6 @@ impl OutputStyle {
 
         Ok(())
     }
-
 }
 
 // Utility functions for common patterns
@@ -339,13 +348,13 @@ pub fn print_prompt_count(count: usize) {
     if count == 0 {
         println!("{}", OutputStyle::muted("No prompts found."));
     } else {
-        println!("📝 {} ({} found)",
-                 OutputStyle::header("Prompts"),
-                 OutputStyle::info(&count.to_string())
+        println!(
+            "📝 {} ({} found)",
+            OutputStyle::header("Prompts"),
+            OutputStyle::info(&count.to_string())
         );
     }
 }
-
 
 pub fn print_warning(message: &str) {
     println!("⚠️  {}", OutputStyle::warning(message));
@@ -437,7 +446,11 @@ impl DisplayFormatter {
         OutputStyle::print_header("📝 Detailed Prompt List");
 
         for (i, prompt) in prompts.iter().enumerate() {
-            println!("\n{}. {}", i + 1, OutputStyle::description(&prompt.description));
+            println!(
+                "\n{}. {}",
+                i + 1,
+                OutputStyle::description(&prompt.description)
+            );
             OutputStyle::print_prompt_list_preview(prompt);
 
             if i < prompts.len() - 1 {
@@ -452,11 +465,17 @@ impl DisplayFormatter {
 
         // Calculate column widths
         let mut max_title_width = 15; // Minimum width for "Description"
-        let mut max_tag_width = 10;    // Minimum width for "Tags"
+        let mut max_tag_width = 10; // Minimum width for "Tags"
 
         for prompt in prompts {
             max_title_width = max_title_width.max(prompt.description.len());
-            let tag_str = prompt.tag.iter().flatten().cloned().collect::<Vec<_>>().join(", ");
+            let tag_str = prompt
+                .tag
+                .iter()
+                .flatten()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
             max_tag_width = max_tag_width.max(tag_str.len());
         }
 
@@ -465,22 +484,25 @@ impl DisplayFormatter {
         max_tag_width = max_tag_width.min(25);
 
         // Print header with colors
-        println!("┌─{}─┬─{}─┬─{}─┐",
-                 "─".repeat(max_title_width),
-                 "─".repeat(max_tag_width),
-                 "─".repeat(19) // Date column
+        println!(
+            "┌─{}─┬─{}─┬─{}─┐",
+            "─".repeat(max_title_width),
+            "─".repeat(max_tag_width),
+            "─".repeat(19) // Date column
         );
-        println!("│ {:<width_title$} │ {:<width_tags$} │ {:^19} │",
-                 OutputStyle::header("Description"),
-                 OutputStyle::header("Tags"),
-                 OutputStyle::header("Updated"),
-                 width_title = max_title_width,
-                 width_tags = max_tag_width
+        println!(
+            "│ {:<width_title$} │ {:<width_tags$} │ {:^19} │",
+            OutputStyle::header("Description"),
+            OutputStyle::header("Tags"),
+            OutputStyle::header("Updated"),
+            width_title = max_title_width,
+            width_tags = max_tag_width
         );
-        println!("├─{}─┼─{}─┼─{}─┤",
-                 "─".repeat(max_title_width),
-                 "─".repeat(max_tag_width),
-                 "─".repeat(19)
+        println!(
+            "├─{}─┼─{}─┼─{}─┤",
+            "─".repeat(max_title_width),
+            "─".repeat(max_tag_width),
+            "─".repeat(19)
         );
 
         // Print rows with colors
@@ -489,19 +511,21 @@ impl DisplayFormatter {
             let tag_str = format_tags_comma(&prompt.tag);
             let tag_str = truncate_string(&tag_str, max_tag_width);
 
-            println!("│ {:<width_title$} │ {:<width_tags$} │ {} │",
-                     OutputStyle::description(&description),
-                     OutputStyle::tags(&tag_str),
-                     OutputStyle::muted(&format_datetime(&prompt.updated_at)),
-                     width_title = max_title_width,
-                     width_tags = max_tag_width
+            println!(
+                "│ {:<width_title$} │ {:<width_tags$} │ {} │",
+                OutputStyle::description(&description),
+                OutputStyle::tags(&tag_str),
+                OutputStyle::muted(&format_datetime(&prompt.updated_at)),
+                width_title = max_title_width,
+                width_tags = max_tag_width
             );
         }
 
-        println!("└─{}─┴─{}─┴─{}─┘",
-                 "─".repeat(max_title_width),
-                 "─".repeat(max_tag_width),
-                 "─".repeat(19)
+        println!(
+            "└─{}─┴─{}─┴─{}─┘",
+            "─".repeat(max_title_width),
+            "─".repeat(max_tag_width),
+            "─".repeat(19)
         );
     }
 

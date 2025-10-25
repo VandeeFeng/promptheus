@@ -3,18 +3,18 @@
 //! This module provides the main implementation of all core traits,
 //! serving as the central hub for prompt management operations.
 
+use crate::cli::ListFormat;
+use crate::config::Config;
 use crate::core::{
     data::{Prompt, PromptCollection, PromptStats},
-    traits::{PromptStorage, PromptSearch, PromptDisplay, PromptInteraction, PromptCrud},
+    traits::{PromptCrud, PromptDisplay, PromptInteraction, PromptSearch, PromptStorage},
 };
-use crate::config::Config;
-use crate::cli::ListFormat;
-use crate::utils::error::{AppResult, AppError};
+use crate::utils::error::{AppError, AppResult};
 use crate::utils::{
+    console::{parse_command_variables, prompt_for_variables, replace_command_variables},
+    output::DisplayFormatter,
     search::{SearchEngine, interactive_search_with_external_tool},
     stats::StatsCalculator,
-    output::DisplayFormatter,
-    console::{parse_command_variables, prompt_for_variables, replace_command_variables},
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -30,11 +30,16 @@ pub struct PromptOperations {
 impl PromptOperations {
     /// Create a new PromptOperations instance with the given configuration
     pub fn new(config: &Config) -> Self {
-        Self { config: config.clone() }
+        Self {
+            config: config.clone(),
+        }
     }
 
     /// Generate deterministic ID based on description and created_at timestamp
-    fn generate_deterministic_id(description: &str, created_at: &chrono::DateTime<chrono::Utc>) -> String {
+    fn generate_deterministic_id(
+        description: &str,
+        created_at: &chrono::DateTime<chrono::Utc>,
+    ) -> String {
         let input = format!("{}{}", description, created_at.to_rfc3339());
         let mut hasher = DefaultHasher::new();
         input.hash(&mut hasher);
@@ -56,7 +61,10 @@ impl PromptOperations {
         let mut prompts = Vec::new();
         for mut prompt in collection.prompts {
             if prompt.id.is_none() {
-                prompt.id = Some(Self::generate_deterministic_id(&prompt.description, &prompt.created_at));
+                prompt.id = Some(Self::generate_deterministic_id(
+                    &prompt.description,
+                    &prompt.created_at,
+                ));
             }
             prompts.push(prompt);
         }
@@ -66,11 +74,17 @@ impl PromptOperations {
 
     /// Save prompts with error handling
     fn save_prompts_internal(&self, collection: &PromptCollection) -> AppResult<()> {
-        let content = toml::to_string_pretty(collection)
-            .map_err(|e| AppError::System(format!("Failed to serialize prompt collection: {}", e)))?;
+        let content = toml::to_string_pretty(collection).map_err(|e| {
+            AppError::System(format!("Failed to serialize prompt collection: {}", e))
+        })?;
 
-        std::fs::write(&self.config.general.prompt_file, content)
-            .map_err(|e| AppError::Io(format!("Failed to write prompt file: {}: {}", self.config.general.prompt_file.display(), e)))?;
+        std::fs::write(&self.config.general.prompt_file, content).map_err(|e| {
+            AppError::Io(format!(
+                "Failed to write prompt file: {}: {}",
+                self.config.general.prompt_file.display(),
+                e
+            ))
+        })?;
 
         Ok(())
     }
@@ -83,11 +97,21 @@ impl PromptOperations {
         category: Option<&str>,
     ) -> AppResult<Vec<(Prompt, String)>> {
         let collection = self.load_prompts_with_ids()?;
-        Ok(SearchEngine::format_for_selection(&collection, query, tag, category, &self.config))
+        Ok(SearchEngine::format_for_selection(
+            &collection,
+            query,
+            tag,
+            category,
+            &self.config,
+        ))
     }
 
     /// Find prompt by parsing its display line
-    pub fn find_prompt_by_display_line(&self, prompts: &[Prompt], selected_line: &str) -> Option<usize> {
+    pub fn find_prompt_by_display_line(
+        &self,
+        prompts: &[Prompt],
+        selected_line: &str,
+    ) -> Option<usize> {
         SearchEngine::find_by_display_line(prompts, selected_line)
     }
 
@@ -119,8 +143,13 @@ impl PromptOperations {
 // Implement PromptStorage trait
 impl PromptStorage for PromptOperations {
     fn load_prompts(&self) -> AppResult<PromptCollection> {
-        let content = std::fs::read_to_string(&self.config.general.prompt_file)
-            .map_err(|e| AppError::Io(format!("Failed to read prompt file: {}: {}", self.config.general.prompt_file.display(), e)))?;
+        let content = std::fs::read_to_string(&self.config.general.prompt_file).map_err(|e| {
+            AppError::Io(format!(
+                "Failed to read prompt file: {}: {}",
+                self.config.general.prompt_file.display(),
+                e
+            ))
+        })?;
 
         // Handle empty or invalid TOML files
         if content.trim().is_empty() {
@@ -142,16 +171,27 @@ impl PromptStorage for PromptOperations {
     fn ensure_storage_exists(&self) -> AppResult<()> {
         if !self.config.general.prompt_file.exists() {
             if let Some(parent) = self.config.general.prompt_file.parent() {
-                std::fs::create_dir_all(parent)
-                    .map_err(|e| AppError::Io(format!("Failed to create prompt directory: {}: {}", parent.display(), e)))?;
+                std::fs::create_dir_all(parent).map_err(|e| {
+                    AppError::Io(format!(
+                        "Failed to create prompt directory: {}: {}",
+                        parent.display(),
+                        e
+                    ))
+                })?;
             }
 
             let default_collection = PromptCollection::default();
-            let content = toml::to_string_pretty(&default_collection)
-                .map_err(|e| AppError::System(format!("Failed to create default prompt collection: {}", e)))?;
+            let content = toml::to_string_pretty(&default_collection).map_err(|e| {
+                AppError::System(format!("Failed to create default prompt collection: {}", e))
+            })?;
 
-            std::fs::write(&self.config.general.prompt_file, content)
-                .map_err(|e| AppError::Io(format!("Failed to create prompt file: {}: {}", self.config.general.prompt_file.display(), e)))?;
+            std::fs::write(&self.config.general.prompt_file, content).map_err(|e| {
+                AppError::Io(format!(
+                    "Failed to create prompt file: {}: {}",
+                    self.config.general.prompt_file.display(),
+                    e
+                ))
+            })?;
         }
 
         Ok(())
@@ -229,10 +269,16 @@ impl PromptInteraction for PromptOperations {
             copy_fn(&rendered_content)?;
             crate::utils::print_success("Prompt copied to clipboard!");
             // Also show content with pagination after copying
-            crate::utils::output::OutputStyle::ask_and_display_content(&rendered_content, "📄 Content")?;
+            crate::utils::output::OutputStyle::ask_and_display_content(
+                &rendered_content,
+                "📄 Content",
+            )?;
         } else {
             // Show content with pagination if needed
-            crate::utils::output::OutputStyle::ask_and_display_content(&rendered_content, "📄 Content")?;
+            crate::utils::output::OutputStyle::ask_and_display_content(
+                &rendered_content,
+                "📄 Content",
+            )?;
         }
 
         Ok(())
@@ -244,14 +290,15 @@ impl PromptInteraction for PromptOperations {
         }
 
         // Convert prompts to display strings for selection
-        let display_strings: Vec<String> = prompts.iter()
+        let display_strings: Vec<String> = prompts
+            .iter()
             .map(|prompt| self.format_prompt_for_selection(prompt))
             .collect();
 
         if let Some(selected_line) = interactive_search_with_external_tool(
             &display_strings,
             &self.config.general.select_cmd,
-            None
+            None,
         )? {
             if let Some(index) = self.find_prompt_by_display_line(&prompts, &selected_line) {
                 Ok(Some(prompts[index].clone()))
@@ -274,7 +321,8 @@ impl PromptCrud for PromptOperations {
 
     fn delete_prompt(&self, id: &str) -> AppResult<()> {
         let mut collection = self.load_prompts_with_ids()?;
-        collection.delete_prompt(id)
+        collection
+            .delete_prompt(id)
             .ok_or_else(|| AppError::System(format!("Prompt with ID '{}' not found", id)))?;
         self.save_prompts(&collection)
     }

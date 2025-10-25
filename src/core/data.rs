@@ -3,12 +3,12 @@
 //! This module contains the fundamental data structures used throughout
 //! the Promptheus application.
 
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
-use uuid::Uuid;
-use std::collections::HashMap;
 use crate::config::{Config, SortBy};
 use crate::utils::format;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use uuid::Uuid;
 
 /// A single prompt with metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,13 +69,13 @@ impl Prompt {
         if self.tag.is_none() {
             self.tag = Some(vec![tag]);
         } else if let Some(ref mut tags) = self.tag
-            && !tags.contains(&tag) {
-                tags.push(tag);
-                self.updated_at = Utc::now();
-            }
+            && !tags.contains(&tag)
+        {
+            tags.push(tag);
+            self.updated_at = Utc::now();
+        }
     }
 }
-
 
 impl PromptCollection {
     /// Create a new empty prompt collection
@@ -94,9 +94,11 @@ impl PromptCollection {
     pub fn delete_prompt(&mut self, identifier: &str) -> Option<Prompt> {
         if let Some(prompt) = self.find_prompt(identifier) {
             // Find the index of the found prompt to remove it
-            if let Some(index) = self.prompts.iter().position(|p| {
-                p.id == prompt.id && p.description == prompt.description
-            }) {
+            if let Some(index) = self
+                .prompts
+                .iter()
+                .position(|p| p.id == prompt.id && p.description == prompt.description)
+            {
                 return Some(self.prompts.remove(index));
             }
         }
@@ -105,7 +107,9 @@ impl PromptCollection {
 
     /// Find a prompt by ID
     pub fn find_by_id(&self, id: &str) -> Option<&Prompt> {
-        self.prompts.iter().find(|p| p.id.as_ref() == Some(&id.to_string()))
+        self.prompts
+            .iter()
+            .find(|p| p.id.as_ref() == Some(&id.to_string()))
     }
 
     /// Find a prompt by description
@@ -155,9 +159,7 @@ impl PromptCollection {
                     tag_str.contains(&search_query)
                 });
 
-                description.contains(&search_query) ||
-                    content.contains(&search_query) ||
-                    tags_match
+                description.contains(&search_query) || content.contains(&search_query) || tags_match
             });
         }
 
@@ -187,7 +189,8 @@ impl PromptCollection {
 
     /// Get all unique tags from the collection
     pub fn get_all_tags(&self) -> Vec<String> {
-        let mut tags: Vec<String> = self.prompts
+        let mut tags: Vec<String> = self
+            .prompts
             .iter()
             .flat_map(|p| p.tag.iter().flatten().cloned())
             .collect();
@@ -198,7 +201,8 @@ impl PromptCollection {
 
     /// Get all unique categories from the collection
     pub fn get_categories(&self) -> Vec<String> {
-        let mut categories: Vec<String> = self.prompts
+        let mut categories: Vec<String> = self
+            .prompts
             .clone()
             .into_iter()
             .filter_map(|p| p.category)
@@ -212,12 +216,8 @@ impl PromptCollection {
     /// Calculate statistics for the collection
     pub fn get_stats(&self) -> PromptStats {
         let total_prompts = self.prompts.len();
-        let total_tags = self.prompts.iter()
-            .map(|p| p.tag.iter().len())
-            .sum();
-        let total_categories = self.prompts.iter()
-            .filter(|p| p.category.is_some())
-            .count();
+        let total_tags = self.prompts.iter().map(|p| p.tag.iter().len()).sum();
+        let total_categories = self.prompts.iter().filter(|p| p.category.is_some()).count();
 
         let mut tag_counts = HashMap::new();
         let mut category_counts = HashMap::new();

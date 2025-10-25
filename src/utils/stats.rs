@@ -9,9 +9,21 @@ impl StatsCalculator {
     pub fn print_stats(stats: &PromptStats) {
         OutputStyle::print_header("📊 Prompt Statistics");
 
-        OutputStyle::print_field_colored("Total prompts", &stats.total_prompts.to_string(), OutputStyle::info);
-        OutputStyle::print_field_colored("Total tags", &stats.total_tags.to_string(), OutputStyle::info);
-        OutputStyle::print_field_colored("Categories used", &stats.total_categories.to_string(), OutputStyle::info);
+        OutputStyle::print_field_colored(
+            "Total prompts",
+            &stats.total_prompts.to_string(),
+            OutputStyle::info,
+        );
+        OutputStyle::print_field_colored(
+            "Total tags",
+            &stats.total_tags.to_string(),
+            OutputStyle::info,
+        );
+        OutputStyle::print_field_colored(
+            "Categories used",
+            &stats.total_categories.to_string(),
+            OutputStyle::info,
+        );
 
         if !stats.tag_counts.is_empty() {
             println!("\n🏷️  {}:", OutputStyle::header("Most used tags"));
@@ -19,7 +31,11 @@ impl StatsCalculator {
             sorted_tags.sort_by(|a, b| b.1.cmp(a.1));
 
             for (tag, count) in sorted_tags.iter().take(10) {
-                println!("  {}: {}", OutputStyle::tags(tag), OutputStyle::info(&count.to_string()));
+                println!(
+                    "  {}: {}",
+                    OutputStyle::tags(tag),
+                    OutputStyle::info(&count.to_string())
+                );
             }
         }
 
@@ -29,7 +45,11 @@ impl StatsCalculator {
             sorted_categories.sort_by(|a, b| b.1.cmp(a.1));
 
             for (category, count) in sorted_categories {
-                println!("  {}: {}", OutputStyle::tag(category), OutputStyle::info(&count.to_string()));
+                println!(
+                    "  {}: {}",
+                    OutputStyle::tag(category),
+                    OutputStyle::info(&count.to_string())
+                );
             }
         }
     }

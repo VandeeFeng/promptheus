@@ -1,15 +1,12 @@
 // Configuration operations
 // Consolidated from configure.rs
 
+use crate::cli::ConfigCommands;
 use crate::config::Config;
 use crate::utils;
-use crate::cli::ConfigCommands;
 use crate::utils::error::AppResult;
 
-pub fn handle_config_command(
-    mut config: Config,
-    command: Option<ConfigCommands>,
-) -> AppResult<()> {
+pub fn handle_config_command(mut config: Config, command: Option<ConfigCommands>) -> AppResult<()> {
     match command {
         Some(ConfigCommands::Show) => handle_show_command(&config),
         Some(ConfigCommands::Open) => handle_open_command(),
@@ -25,7 +22,16 @@ fn handle_show_command(config: &Config) -> AppResult<()> {
     println!("General:");
     println!("  Prompt file: {}", config.general.prompt_file.display());
     if !config.general.prompt_dirs.is_empty() {
-        println!("  Prompt dirs: {}", config.general.prompt_dirs.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", "));
+        println!(
+            "  Prompt dirs: {}",
+            config
+                .general
+                .prompt_dirs
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
     println!("  Editor: {}", config.general.editor);
     println!("  Select command: {}", config.general.select_cmd);
@@ -36,7 +42,10 @@ fn handle_show_command(config: &Config) -> AppResult<()> {
     println!("  Sort by: {:?}", config.general.sort_by);
     println!("  Color: {}", config.general.color);
     println!("  Content preview: {}", config.general.content_preview);
-    println!("  Search case sensitive: {}", config.general.search_case_sensitive);
+    println!(
+        "  Search case sensitive: {}",
+        config.general.search_case_sensitive
+    );
     if let Some(format) = &config.general.format {
         println!("  Default format: {}", format);
     }
@@ -80,7 +89,10 @@ fn handle_config_help() -> AppResult<()> {
     println!("  promptheus config open    - Open configuration file in editor");
     println!("  promptheus config reset   - Reset configuration to defaults");
     println!();
-    println!("Configuration file location: {}", Config::config_file_path().display());
+    println!(
+        "Configuration file location: {}",
+        Config::config_file_path().display()
+    );
     Ok(())
 }
 
@@ -97,7 +109,9 @@ fn handle_open_command() -> AppResult<()> {
 }
 
 fn handle_reset_command(config: &mut Config) -> AppResult<()> {
-    if utils::prompt_yes_no("Are you sure you want to reset configuration to defaults? This will overwrite your current settings.")? {
+    if utils::prompt_yes_no(
+        "Are you sure you want to reset configuration to defaults? This will overwrite your current settings.",
+    )? {
         *config = Config::default();
         config.save()?;
         println!("✓ Configuration reset to defaults!");

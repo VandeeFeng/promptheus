@@ -1,9 +1,10 @@
-use crate::utils::error::{AppResult, AppError};
+use crate::utils::error::{AppError, AppResult};
 use crossterm::terminal::size;
 
 /// Get terminal size (rows, columns)
 pub fn get_terminal_size() -> AppResult<(u16, u16)> {
-    size().map(|(width, height)| (height, width))
+    size()
+        .map(|(width, height)| (height, width))
         .map_err(|e| AppError::System(format!("Failed to get terminal size: {}", e)))
 }
 
@@ -17,7 +18,8 @@ pub fn should_paginate(content: &str, terminal_height: u16) -> bool {
 /// Display content using minus pager for static content
 pub fn paginate_static_content(content: &str) -> AppResult<()> {
     let pager = minus::Pager::new();
-    pager.push_str(content)
+    pager
+        .push_str(content)
         .map_err(|e| AppError::System(format!("Failed to push content to pager: {}", e)))?;
 
     if let Err(e) = minus::page_all(pager) {
@@ -30,4 +32,3 @@ pub fn paginate_static_content(content: &str) -> AppResult<()> {
 
     Ok(())
 }
-

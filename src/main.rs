@@ -1,8 +1,8 @@
 // Binary entry point - import modules directly
 mod cli;
-mod manager;
 mod config;
 mod core;
+mod manager;
 mod sync;
 mod utils;
 

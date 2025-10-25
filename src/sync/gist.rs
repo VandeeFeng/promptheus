@@ -1,6 +1,6 @@
 use super::{RemoteSnippet, SyncClient, get_github_token};
 use crate::config::GistConfig;
-use crate::utils::error::{AppResult, AppError};
+use crate::utils::error::{AppError, AppResult};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use reqwest::Client;
@@ -79,12 +79,16 @@ impl GistClient {
     }
 
     async fn get_gist(&self) -> AppResult<Gist> {
-        let gist_id = self.config.gist_id.as_ref()
+        let gist_id = self
+            .config
+            .gist_id
+            .as_ref()
             .ok_or_else(|| AppError::Sync("No Gist ID configured".to_string()))?;
 
         let url = format!("{}/gists/{}", GITHUB_API_BASE, gist_id);
 
-        let response = self.client
+        let response = self
+            .client
             .get(&url)
             .bearer_auth(&self.access_token)
             .send()
@@ -94,10 +98,15 @@ impl GistClient {
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(AppError::Network(format!("Failed to get gist: {} - {}", status, error_text)));
+            return Err(AppError::Network(format!(
+                "Failed to get gist: {} - {}",
+                status, error_text
+            )));
         }
 
-        let gist: Gist = response.json().await
+        let gist: Gist = response
+            .json()
+            .await
             .map_err(|e| AppError::Network(format!("Failed to parse gist response: {}", e)))?;
 
         Ok(gist)
@@ -107,10 +116,7 @@ impl GistClient {
         let url = format!("{}/gists", GITHUB_API_BASE);
 
         let mut files = HashMap::new();
-        files.insert(
-            self.config.file_name.clone(),
-            GistFileContent { content }
-        );
+        files.insert(self.config.file_name.clone(), GistFileContent { content });
 
         let request = CreateGistRequest {
             description: "Promptheus snippets".to_string(),
@@ -118,7 +124,8 @@ impl GistClient {
             files,
         };
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .bearer_auth(&self.access_token)
             .json(&request)
@@ -129,33 +136,38 @@ impl GistClient {
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(AppError::Network(format!("Failed to create gist: {} - {}", status, error_text)));
+            return Err(AppError::Network(format!(
+                "Failed to create gist: {} - {}",
+                status, error_text
+            )));
         }
 
-        let gist: Gist = response.json().await
-            .map_err(|e| AppError::Network(format!("Failed to parse create gist response: {}", e)))?;
+        let gist: Gist = response.json().await.map_err(|e| {
+            AppError::Network(format!("Failed to parse create gist response: {}", e))
+        })?;
 
         Ok(gist.id)
     }
 
     async fn update_gist(&self, content: String) -> AppResult<()> {
-        let gist_id = self.config.gist_id.as_ref()
+        let gist_id = self
+            .config
+            .gist_id
+            .as_ref()
             .ok_or_else(|| AppError::Sync("No Gist ID configured".to_string()))?;
 
         let url = format!("{}/gists/{}", GITHUB_API_BASE, gist_id);
 
         let mut files = HashMap::new();
-        files.insert(
-            self.config.file_name.clone(),
-            GistFileContent { content }
-        );
+        files.insert(self.config.file_name.clone(), GistFileContent { content });
 
         let request = UpdateGistRequest {
             description: Some("Promptheus snippets".to_string()),
             files,
         };
 
-        let response = self.client
+        let response = self
+            .client
             .patch(&url)
             .bearer_auth(&self.access_token)
             .json(&request)
@@ -166,7 +178,10 @@ impl GistClient {
         if !response.status().is_success() {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(AppError::Network(format!("Failed to update gist: {} - {}", status, error_text)));
+            return Err(AppError::Network(format!(
+                "Failed to update gist: {} - {}",
+                status, error_text
+            )));
         }
 
         Ok(())
@@ -176,10 +191,16 @@ impl GistClient {
         let gist = self.get_gist().await?;
 
         // Find the target file
-        let gist_file = gist.files.get(&self.config.file_name)
-            .ok_or_else(|| AppError::Sync(format!("File '{}' not found in gist", self.config.file_name)))?;
+        let gist_file = gist.files.get(&self.config.file_name).ok_or_else(|| {
+            AppError::Sync(format!(
+                "File '{}' not found in gist",
+                self.config.file_name
+            ))
+        })?;
 
-        let content = gist_file.content.as_ref()
+        let content = gist_file
+            .content
+            .as_ref()
             .ok_or_else(|| AppError::Sync("File content is empty".to_string()))?
             .clone();
 
@@ -204,7 +225,10 @@ impl SyncClient for GistClient {
             // Create new gist
             let gist_id = self.create_gist(content).await?;
             println!("✅ Created new gist: {}", gist_id);
-            println!("💡 Add this gist ID to your config file: gist_id = \"{}\"", gist_id);
+            println!(
+                "💡 Add this gist ID to your config file: gist_id = \"{}\"",
+                gist_id
+            );
         } else {
             // Update existing gist
             self.update_gist(content).await?;

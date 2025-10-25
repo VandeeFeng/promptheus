@@ -1,37 +1,41 @@
 // Sync operations - Sync, Push, Export
 // Consolidated from sync.rs, push.rs, export.rs
 
-use crate::utils::error::{AppResult, AppError, report_error};
+use crate::utils::error::{AppError, AppResult, report_error};
 use chrono::Utc;
 use std::fs;
 use std::io::{self, Write};
 
-use crate::cli::{SyncArgs, ExportArgs};
+use crate::cli::{ExportArgs, SyncArgs};
 use crate::config::Config;
-use crate::core::traits::PromptStorage;
 use crate::core::operations::PromptOperations;
-use crate::sync::{gist::GistClient, SyncClient, should_sync, SyncDirection};
-use crate::utils::{print_warning, generate_html, open_browser};
+use crate::core::traits::PromptStorage;
+use crate::sync::{SyncClient, SyncDirection, gist::GistClient, should_sync};
+use crate::utils::{generate_html, open_browser, print_warning};
 
 /// Check if an error is likely network-related and provide appropriate user feedback
 fn handle_potential_network_error(error: &AppError) -> AppResult<()> {
     let error_msg = error.to_string().to_lowercase();
 
     // Check for common network-related error indicators
-    if error_msg.contains("network") ||
-        error_msg.contains("connection") ||
-        error_msg.contains("timeout") ||
-        error_msg.contains("dns") ||
-        error_msg.contains("unreachable") ||
-        error_msg.contains("refused") ||
-        error_msg.contains("host") ||
-        error_msg.contains("ssl") ||
-        error_msg.contains("certificate") ||
-        error_msg.contains("tcp") ||
-        error_msg.contains("http") {
-            report_error(&AppError::Network(format!("Request failed: {}. Please check your internet connection and try again.", error)));
-            return Err(AppError::Network(format!("Request failed: {}", error)));
-        }
+    if error_msg.contains("network")
+        || error_msg.contains("connection")
+        || error_msg.contains("timeout")
+        || error_msg.contains("dns")
+        || error_msg.contains("unreachable")
+        || error_msg.contains("refused")
+        || error_msg.contains("host")
+        || error_msg.contains("ssl")
+        || error_msg.contains("certificate")
+        || error_msg.contains("tcp")
+        || error_msg.contains("http")
+    {
+        report_error(&AppError::Network(format!(
+            "Request failed: {}. Please check your internet connection and try again.",
+            error
+        )));
+        return Err(AppError::Network(format!("Request failed: {}", error)));
+    }
 
     // Return the original error so the calling code can handle it
     Err(error.clone())
@@ -40,8 +44,12 @@ fn handle_potential_network_error(error: &AppError) -> AppResult<()> {
 // Sync operations
 pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> AppResult<()> {
     // Check if any sync backend is configured
-    let _gist_config = config.gist.as_ref()
-        .ok_or_else(|| AppError::System("No sync backend configured. Please configure Gist or GitLab in your config.".to_string()))?;
+    let _gist_config = config.gist.as_ref().ok_or_else(|| {
+        AppError::System(
+            "No sync backend configured. Please configure Gist or GitLab in your config."
+                .to_string(),
+        )
+    })?;
 
     println!("🔄 Starting sync process...");
 
@@ -49,18 +57,22 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> AppResult<(
     let sync_client: Box<dyn SyncClient> = if let Some(gist_config) = &config.gist {
         Box::new(GistClient::new(gist_config.clone())?)
     } else {
-        return Err(AppError::System("No supported sync backend configured".to_string()));
+        return Err(AppError::System(
+            "No supported sync backend configured".to_string(),
+        ));
     };
 
     // Create storage instance
     let storage = PromptOperations::new(&config);
 
     // Load local prompts
-    let local_prompts = storage.load_prompts()
+    let local_prompts = storage
+        .load_prompts()
         .map_err(|e| AppError::System(format!("Failed to load local prompts: {}", e)))?;
 
     // Get the most recent local update time
-    let local_updated = local_prompts.prompts
+    let local_updated = local_prompts
+        .prompts
         .iter()
         .map(|p| p.updated_at)
         .max()
@@ -68,7 +80,9 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> AppResult<(
 
     // Get remote snippet
     println!("📥 Fetching remote content...");
-    let remote_snippet = sync_client.get_remote().await
+    let remote_snippet = sync_client
+        .get_remote()
+        .await
         .map_err(|e| AppError::Network(format!("Failed to fetch remote content: {}", e)))
         .map_err(|e| handle_potential_network_error(&e).unwrap_err())?;
 
@@ -106,8 +120,11 @@ pub async fn handle_sync_command(config: Config, args: &SyncArgs) -> AppResult<(
 // Push operations (force upload)
 pub async fn handle_push_command(config: Config) -> AppResult<()> {
     // Check if sync backend is configured
-    let gist_config = config.gist.as_ref()
-        .ok_or_else(|| AppError::System("No sync backend configured. Please configure Gist in your config.".to_string()))?;
+    let gist_config = config.gist.as_ref().ok_or_else(|| {
+        AppError::System(
+            "No sync backend configured. Please configure Gist in your config.".to_string(),
+        )
+    })?;
 
     println!("🚀 Starting push process...");
     println!("📤 Force uploading local prompts to remote...");
@@ -116,7 +133,8 @@ pub async fn handle_push_command(config: Config) -> AppResult<()> {
     let storage = PromptOperations::new(&config);
 
     // Load local prompts
-    let local_prompts = storage.load_prompts()
+    let local_prompts = storage
+        .load_prompts()
         .map_err(|e| AppError::System(format!("Failed to load local prompts: {}", e)))?;
 
     if local_prompts.prompts.is_empty() {
@@ -136,11 +154,16 @@ pub async fn handle_push_command(config: Config) -> AppResult<()> {
         .map_err(|e| AppError::System(format!("Failed to serialize local prompts: {}", e)))?;
 
     // Upload to remote
-    sync_client.upload(content).await
+    sync_client
+        .upload(content)
+        .await
         .map_err(|e| AppError::Sync(format!("Failed to upload to remote: {}", e)))
         .map_err(|e| handle_potential_network_error(&e).unwrap_err())?;
 
-    println!("✅ Successfully pushed {} prompt(s) to remote", local_prompts.prompts.len());
+    println!(
+        "✅ Successfully pushed {} prompt(s) to remote",
+        local_prompts.prompts.len()
+    );
     println!("🎉 Push completed successfully!");
 
     Ok(())
@@ -165,15 +188,26 @@ pub fn handle_export_command(config: Config, args: &ExportArgs) -> AppResult<()>
         if output.contains('/') || output.contains('\\') {
             output.clone()
         } else {
-            let config_dir = storage.config().general.prompt_file.parent()
+            let config_dir = storage
+                .config()
+                .general
+                .prompt_file
+                .parent()
                 .ok_or_else(|| AppError::System("Cannot determine config directory".to_string()))?;
             config_dir.join(output).to_string_lossy().to_string()
         }
     } else {
         // Use config directory with default filename
-        let config_dir = storage.config().general.prompt_file.parent()
+        let config_dir = storage
+            .config()
+            .general
+            .prompt_file
+            .parent()
             .ok_or_else(|| AppError::System("Cannot determine config directory".to_string()))?;
-        config_dir.join(default_filename).to_string_lossy().to_string()
+        config_dir
+            .join(default_filename)
+            .to_string_lossy()
+            .to_string()
     };
 
     // Write HTML file
@@ -196,14 +230,18 @@ async fn upload_to_remote(
     local_prompts: &crate::core::data::PromptCollection,
 ) -> AppResult<()> {
     print!("📤 Uploading local changes to remote... ");
-    io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
+    io::stdout()
+        .flush()
+        .map_err(|e| AppError::Io(e.to_string()))?;
 
     // Serialize local prompts to TOML
     let content = toml::to_string_pretty(local_prompts)
         .map_err(|e| AppError::System(format!("Failed to serialize local prompts: {}", e)))?;
 
     // Upload to remote
-    sync_client.upload(content).await
+    sync_client
+        .upload(content)
+        .await
         .map_err(|e| AppError::Sync(format!("Failed to upload to remote: {}", e)))
         .map_err(|e| handle_potential_network_error(&e).unwrap_err())?;
 
@@ -216,14 +254,18 @@ async fn download_from_remote(
     remote_snippet: &crate::sync::RemoteSnippet,
 ) -> AppResult<()> {
     print!("📥 Downloading remote changes... ");
-    io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
+    io::stdout()
+        .flush()
+        .map_err(|e| AppError::Io(e.to_string()))?;
 
     // Parse remote content
-    let remote_prompts: crate::core::data::PromptCollection = toml::from_str(&remote_snippet.content)
-        .map_err(|e| AppError::Sync(format!("Failed to parse remote content: {}", e)))?;
+    let remote_prompts: crate::core::data::PromptCollection =
+        toml::from_str(&remote_snippet.content)
+            .map_err(|e| AppError::Sync(format!("Failed to parse remote content: {}", e)))?;
 
     // Save remote prompts locally
-    storage.save_prompts(&remote_prompts)
+    storage
+        .save_prompts(&remote_prompts)
         .map_err(|e| AppError::System(format!("Failed to save remote prompts locally: {}", e)))?;
 
     println!("✅ Done");
@@ -246,7 +288,13 @@ pub async fn auto_sync_if_enabled(config: &Config) -> AppResult<()> {
     let prompt_file_path = &config.general.prompt_file;
 
     // Check if file exists and is not empty
-    if !prompt_file_path.exists() || tokio::fs::metadata(prompt_file_path).await.map_err(|e| AppError::Io(e.to_string()))?.len() == 0 {
+    if !prompt_file_path.exists()
+        || tokio::fs::metadata(prompt_file_path)
+            .await
+            .map_err(|e| AppError::Io(e.to_string()))?
+            .len()
+            == 0
+    {
         println!("🔄 Local file is empty or missing, downloading from remote...");
 
         // Download from remote
@@ -256,14 +304,17 @@ pub async fn auto_sync_if_enabled(config: &Config) -> AppResult<()> {
             force: false,
         };
 
-        return handle_sync_command(config.clone(), &sync_args).await
+        return handle_sync_command(config.clone(), &sync_args)
+            .await
             .map_err(|e| AppError::Sync(format!("Auto-sync download failed: {}", e)));
     }
 
     // Get local file modification time
-    let local_metadata = tokio::fs::metadata(prompt_file_path).await
+    let local_metadata = tokio::fs::metadata(prompt_file_path)
+        .await
         .map_err(|e| AppError::Io(e.to_string()))?;
-    let local_modified = local_metadata.modified()
+    let local_modified = local_metadata
+        .modified()
         .map_err(|e| AppError::Io(e.to_string()))?
         .into();
 
@@ -271,7 +322,9 @@ pub async fn auto_sync_if_enabled(config: &Config) -> AppResult<()> {
     let sync_client: Box<dyn SyncClient> = Box::new(GistClient::new(gist_config.clone())?);
 
     // Get remote snippet info
-    let remote_snippet = sync_client.get_remote().await
+    let remote_snippet = sync_client
+        .get_remote()
+        .await
         .map_err(|e| AppError::Network(format!("Failed to fetch remote content: {}", e)))?;
 
     // Compare timestamps to determine if sync is needed
@@ -286,7 +339,8 @@ pub async fn auto_sync_if_enabled(config: &Config) -> AppResult<()> {
         }
         SyncDirection::None => {
             // No sync needed, but let's verify content is the same
-            let local_content = tokio::fs::read_to_string(prompt_file_path).await
+            let local_content = tokio::fs::read_to_string(prompt_file_path)
+                .await
                 .map_err(|e| AppError::Io(e.to_string()))?;
 
             // Try to parse remote content and compare
@@ -330,15 +384,18 @@ pub async fn auto_sync_if_enabled(config: &Config) -> AppResult<()> {
         if local_modified > remote_snippet.updated_at {
             // Upload local changes
             println!("📤 Uploading local changes to remote...");
-            let local_prompts = storage.load_prompts()
+            let local_prompts = storage
+                .load_prompts()
                 .map_err(|e| AppError::System(format!("Failed to load local prompts: {}", e)))?;
 
-            upload_to_remote(&storage, &*sync_client, &local_prompts).await
+            upload_to_remote(&storage, &*sync_client, &local_prompts)
+                .await
                 .map_err(|e| AppError::Sync(format!("Failed to upload to remote: {}", e)))?;
         } else if remote_snippet.updated_at > local_modified {
             // Download remote changes
             println!("📥 Downloading remote changes...");
-            download_from_remote(&storage, &remote_snippet).await
+            download_from_remote(&storage, &remote_snippet)
+                .await
                 .map_err(|e| AppError::Sync(format!("Failed to download remote changes: {}", e)))?;
         }
     }
@@ -362,7 +419,6 @@ pub async fn handle_auto_sync_after_crud(config: &Config) {
         report_error(&AppError::Sync(e.to_string()));
     }
 }
-
 
 #[cfg(test)]
 mod tests {

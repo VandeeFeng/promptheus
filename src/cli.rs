@@ -1,11 +1,13 @@
-use clap::{Parser, Subcommand, Args};
-use std::path::PathBuf;
 use crate::config::Config;
+use crate::manager::{
+    handle_config_command, handle_delete_command, handle_edit_command, handle_exec_command,
+    handle_export_command, handle_list_command, handle_new_command, handle_push_command,
+    handle_search_command, handle_show_command, handle_sync_command,
+};
 use crate::utils::error::AppResult;
-use crate::manager::{handle_new_command, handle_list_command, handle_search_command, handle_exec_command,
-                      handle_edit_command, handle_config_command, handle_show_command, handle_delete_command,
-                      handle_sync_command, handle_push_command, handle_export_command};
 use crate::utils::print_warning;
+use clap::{Args, Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "promptheus")]
@@ -103,7 +105,6 @@ pub enum Commands {
 
     /// Export prompts to file
     Export(ExportArgs),
-
 }
 
 #[derive(Args)]
@@ -141,7 +142,10 @@ pub struct EditArgs {
     #[arg(short = 'c', long, help = "Filter by category")]
     pub category: Option<String>,
 
-    #[arg(long, help = "Force edit of prompt file directly instead of interactive selection")]
+    #[arg(
+        long,
+        help = "Force edit of prompt file directly instead of interactive selection"
+    )]
     pub file: bool,
 
     #[arg(long, help = "Editor command to use (overrides config)")]

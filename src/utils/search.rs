@@ -1,10 +1,9 @@
-use crate::utils::error::{AppResult, AppError};
+use crate::config::Config;
+use crate::core::data::{Prompt, PromptCollection};
+use crate::utils::error::{AppError, AppResult};
+use crate::utils::output::OutputStyle;
 use std::io::Write;
 use std::process::{Command, Stdio};
-use crate::core::data::{Prompt, PromptCollection};
-use crate::config::Config;
-use crate::utils::output::OutputStyle;
-
 
 /// Search engine for prompt filtering and operations
 pub struct SearchEngine;
@@ -32,7 +31,8 @@ impl SearchEngine {
 
         // Filter by category if specified
         let filtered_prompts: Vec<_> = if let Some(category) = &category {
-            prompts.into_iter()
+            prompts
+                .into_iter()
                 .filter(|p| p.category.as_deref() == Some(*category))
                 .collect()
         } else {
@@ -74,7 +74,7 @@ impl SearchEngine {
 pub fn interactive_search_with_external_tool(
     items: &[String],
     select_cmd: &str,
-    query: Option<&str>
+    query: Option<&str>,
 ) -> AppResult<Option<String>> {
     if items.is_empty() {
         return Ok(None);
@@ -83,12 +83,18 @@ pub fn interactive_search_with_external_tool(
     // Check if the select command is available
     let cmd_parts: Vec<&str> = select_cmd.split_whitespace().collect();
     if cmd_parts.is_empty() {
-        return Err(AppError::System(format!("Invalid select command: {}", select_cmd)));
+        return Err(AppError::System(format!(
+            "Invalid select command: {}",
+            select_cmd
+        )));
     }
 
     // Check if command exists
-    match std::process::Command::new(cmd_parts[0]).arg("--version").output() {
-        Ok(_) => {},
+    match std::process::Command::new(cmd_parts[0])
+        .arg("--version")
+        .output()
+    {
+        Ok(_) => {}
         Err(_) => {
             return Ok(None);
         }
@@ -130,21 +136,27 @@ pub fn interactive_search_with_external_tool(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped()); // Capture stderr instead of inheriting
 
-    let mut child = cmd.spawn()
+    let mut child = cmd
+        .spawn()
         .map_err(|e| AppError::System(format!("Failed to spawn command: {}: {}", select_cmd, e)))?;
 
     // Write items to stdin
     if let Some(stdin) = child.stdin.as_mut() {
         for item in items {
             // Write each item followed by NULL character for fzf --read0
-            stdin.write_all(item.as_bytes()).map_err(|e| AppError::Io(format!("Failed to write to stdin: {}", e)))?;
-            stdin.write_all(b"\0").map_err(|e| AppError::Io(format!("Failed to write NULL separator to stdin: {}", e)))?;
+            stdin
+                .write_all(item.as_bytes())
+                .map_err(|e| AppError::Io(format!("Failed to write to stdin: {}", e)))?;
+            stdin.write_all(b"\0").map_err(|e| {
+                AppError::Io(format!("Failed to write NULL separator to stdin: {}", e))
+            })?;
         }
     }
 
     // Read the result
-    let output = child.wait_with_output()
-        .map_err(|e| AppError::System(format!("Failed to read output from: {}: {}", select_cmd, e)))?;
+    let output = child.wait_with_output().map_err(|e| {
+        AppError::System(format!("Failed to read output from: {}: {}", select_cmd, e))
+    })?;
 
     // Check if the command was successful
     // Some tools like fzf return exit code 130 when user presses Ctrl+C or Esc

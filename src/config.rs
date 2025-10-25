@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use crate::utils::error::{AppResult, AppError};
-use std::path::PathBuf;
 use crate::utils::console::detect_editor;
+use crate::utils::error::{AppError, AppResult};
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -32,14 +32,21 @@ pub struct GeneralConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GistConfig {
     pub file_name: String,
-    #[serde(default, serialize_with = "crate::utils::format::serialize_option_string", deserialize_with = "crate::utils::format::deserialize_option_string")]
+    #[serde(
+        default,
+        serialize_with = "crate::utils::format::serialize_option_string",
+        deserialize_with = "crate::utils::format::deserialize_option_string"
+    )]
     pub access_token: Option<String>,
-    #[serde(default, serialize_with = "crate::utils::format::serialize_option_string", deserialize_with = "crate::utils::format::deserialize_option_string")]
+    #[serde(
+        default,
+        serialize_with = "crate::utils::format::serialize_option_string",
+        deserialize_with = "crate::utils::format::deserialize_option_string"
+    )]
     pub gist_id: Option<String>,
     pub public: bool,
     pub auto_sync: bool,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitLabConfig {
@@ -103,14 +110,17 @@ fn detect_best_select_command() -> String {
         "powershell".to_string() // Fallback to PowerShell
     } else {
         // On Unix-like systems, check for available tools
-        if std::path::Path::new("/usr/bin/fzf").exists() ||
-           std::path::Path::new("/usr/local/bin/fzf").exists() {
+        if std::path::Path::new("/usr/bin/fzf").exists()
+            || std::path::Path::new("/usr/local/bin/fzf").exists()
+        {
             "fzf".to_string()
-        } else if std::path::Path::new("/usr/bin/sk").exists() ||
-                  std::path::Path::new("/usr/local/bin/sk").exists() {
+        } else if std::path::Path::new("/usr/bin/sk").exists()
+            || std::path::Path::new("/usr/local/bin/sk").exists()
+        {
             "sk".to_string()
-        } else if std::path::Path::new("/usr/bin/peco").exists() ||
-                  std::path::Path::new("/usr/local/bin/peco").exists() {
+        } else if std::path::Path::new("/usr/bin/peco").exists()
+            || std::path::Path::new("/usr/local/bin/peco").exists()
+        {
             "peco".to_string()
         } else {
             "fzf".to_string() // Default assumption
@@ -139,8 +149,8 @@ impl Config {
             return Ok(default_config);
         }
 
-        let content = std::fs::read_to_string(config_path)
-            .map_err(|e| AppError::Io(e.to_string()))?;
+        let content =
+            std::fs::read_to_string(config_path).map_err(|e| AppError::Io(e.to_string()))?;
 
         let config: Config = toml::from_str(&content)
             .map_err(|e| AppError::System(format!("Failed to parse config file: {}", e)))?;
@@ -155,7 +165,9 @@ impl Config {
         }
 
         if self.general.select_cmd.is_empty() {
-            return Err(AppError::System("Select command cannot be empty".to_string()));
+            return Err(AppError::System(
+                "Select command cannot be empty".to_string(),
+            ));
         }
 
         if let Some(gitlab) = &self.gitlab {
@@ -163,7 +175,9 @@ impl Config {
                 return Err(AppError::System("GitLab URL cannot be empty".to_string()));
             }
             if gitlab.file_name.is_empty() {
-                return Err(AppError::System("GitLab file name cannot be empty".to_string()));
+                return Err(AppError::System(
+                    "GitLab file name cannot be empty".to_string(),
+                ));
             }
         }
 
@@ -171,7 +185,9 @@ impl Config {
             // Only validate gist configuration if it's actually being used (has gist_id or non-empty file_name)
             if gist.gist_id.is_some() || !gist.file_name.is_empty() {
                 if gist.file_name.is_empty() {
-                    return Err(AppError::System("Gist file name cannot be empty when gist sync is configured".to_string()));
+                    return Err(AppError::System(
+                        "Gist file name cannot be empty when gist sync is configured".to_string(),
+                    ));
                 }
 
                 // Validate access token availability if gist_id is set (for updating existing gist)
@@ -186,10 +202,12 @@ impl Config {
 
                 // Validate file name has proper extension
                 if !std::path::Path::new(&gist.file_name)
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("toml")) {
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("toml"))
+                {
                     return Err(AppError::System(
-                        "Gist file name should have .toml extension for proper prompt storage".to_string()
+                        "Gist file name should have .toml extension for proper prompt storage"
+                            .to_string(),
                     ));
                 }
             }
@@ -202,15 +220,13 @@ impl Config {
         let config_path = Self::config_file_path();
 
         if let Some(parent) = config_path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| AppError::Io(e.to_string()))?;
+            std::fs::create_dir_all(parent).map_err(|e| AppError::Io(e.to_string()))?;
         }
 
         let content = toml::to_string_pretty(self)
             .map_err(|e| AppError::System(format!("Failed to serialize config: {}", e)))?;
 
-        std::fs::write(&config_path, content)
-            .map_err(|e| AppError::Io(e.to_string()))?;
+        std::fs::write(&config_path, content).map_err(|e| AppError::Io(e.to_string()))?;
 
         Ok(())
     }
@@ -221,5 +237,4 @@ impl Config {
             .join("promptheus")
             .join("config.toml")
     }
-
-  }
+}

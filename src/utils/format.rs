@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
-use serde::{self, de::Error, Deserialize, Deserializer, Serializer};
+use serde::{self, Deserialize, Deserializer, Serializer, de::Error};
 
 const FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
@@ -20,11 +20,7 @@ where
     D: serde::Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    if s.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(s))
-    }
+    if s.is_empty() { Ok(None) } else { Ok(Some(s)) }
 }
 
 /// Serialize Option<Vec<String>> as empty vector when None

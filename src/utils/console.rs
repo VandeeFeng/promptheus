@@ -1,14 +1,14 @@
-use crate::utils::error::{AppResult, AppError};
+use crate::utils::error::{AppError, AppResult};
+use crate::utils::output::OutputStyle;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent, EnableBracketedPaste, DisableBracketedPaste},
-    execute,
+    cursor,
+    event::{self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEvent},
+    execute, style,
     terminal::{self, ClearType},
-    cursor, style,
 };
+use std::env;
 use std::io::{self, Write};
 use std::process::Command;
-use std::env;
-use crate::utils::output::OutputStyle;
 
 /// Interactive input errors that distinguish between system failures and user actions
 #[derive(Debug)]
@@ -52,14 +52,18 @@ impl RawModeGuard {
     fn new() -> AppResult<Self> {
         terminal::enable_raw_mode()
             .map_err(|e| AppError::System(format!("Failed to enable raw mode: {}", e)))?;
-        Ok(RawModeGuard { bracketed_paste: false })
+        Ok(RawModeGuard {
+            bracketed_paste: false,
+        })
     }
 
     fn with_bracketed_paste() -> AppResult<Self> {
         terminal::enable_raw_mode()
             .map_err(|e| AppError::System(format!("Failed to enable raw mode: {}", e)))?;
         let _ = execute!(io::stdout(), EnableBracketedPaste);
-        Ok(RawModeGuard { bracketed_paste: true })
+        Ok(RawModeGuard {
+            bracketed_paste: true,
+        })
     }
 
     /// Ensure terminal is in a clean state before dropping
@@ -74,40 +78,48 @@ impl RawModeGuard {
             io::stdout(),
             cursor::MoveToColumn(0),
             terminal::Clear(ClearType::CurrentLine)
-        ).map_err(|e| AppError::Io(e.to_string()))?;
-        io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
+        )
+        .map_err(|e| AppError::Io(e.to_string()))?;
+        io::stdout()
+            .flush()
+            .map_err(|e| AppError::Io(e.to_string()))?;
         Ok(())
     }
 
     /// Print text and flush output
     fn print_and_flush(&self, text: &str) -> AppResult<()> {
         execute!(io::stdout(), style::Print(text)).map_err(|e| AppError::Io(e.to_string()))?;
-        io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
+        io::stdout()
+            .flush()
+            .map_err(|e| AppError::Io(e.to_string()))?;
         Ok(())
     }
 
     /// Print formatted line with prompt and content
     fn print_line(&self, prompt: &str, content: &str, suggestion: Option<&str>) -> AppResult<()> {
         self.clear_line()?;
-        execute!(
-            io::stdout(),
-            style::Print(prompt),
-            style::Print(content)
-        ).map_err(|e| AppError::Io(e.to_string()))?;
+        execute!(io::stdout(), style::Print(prompt), style::Print(content))
+            .map_err(|e| AppError::Io(e.to_string()))?;
 
         if let Some(suggestion) = suggestion {
-            execute!(io::stdout(), style::Print(OutputStyle::muted(suggestion))).map_err(|e| AppError::Io(e.to_string()))?;
+            execute!(io::stdout(), style::Print(OutputStyle::muted(suggestion)))
+                .map_err(|e| AppError::Io(e.to_string()))?;
         }
 
-        io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
+        io::stdout()
+            .flush()
+            .map_err(|e| AppError::Io(e.to_string()))?;
         Ok(())
     }
 
     /// Move cursor left by specified positions
     fn move_cursor_left(&self, positions: u16) -> AppResult<()> {
         if positions > 0 {
-            execute!(io::stdout(), cursor::MoveLeft(positions)).map_err(|e| AppError::Io(e.to_string()))?;
-            io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
+            execute!(io::stdout(), cursor::MoveLeft(positions))
+                .map_err(|e| AppError::Io(e.to_string()))?;
+            io::stdout()
+                .flush()
+                .map_err(|e| AppError::Io(e.to_string()))?;
         }
         Ok(())
     }
@@ -149,10 +161,14 @@ pub fn detect_editor(editor_cmd: Option<&str>) -> String {
 
 pub fn prompt_input(prompt: &str) -> AppResult<String> {
     print!("{}", prompt);
-    io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
+    io::stdout()
+        .flush()
+        .map_err(|e| AppError::Io(e.to_string()))?;
 
     let mut input = String::new();
-    io::stdin().read_line(&mut input).map_err(|e| AppError::Io(e.to_string()))?;
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(|e| AppError::Io(e.to_string()))?;
 
     // Ensure proper newline after input
     println!();
@@ -165,7 +181,9 @@ fn handle_interactive_result<T>(result: Result<T, InteractiveError>) -> Option<T
     match result {
         Ok(value) => Some(value),
         Err(InteractiveError::Cancelled) => {
-            crate::utils::error::handle_flow(crate::utils::error::FlowResult::Cancelled("Operation cancelled by user".to_string()));
+            crate::utils::error::handle_flow(crate::utils::error::FlowResult::Cancelled(
+                "Operation cancelled by user".to_string(),
+            ));
             None
         }
         Err(InteractiveError::SystemError(e)) => {
@@ -188,30 +206,47 @@ fn find_autocomplete_suggestion(input: &str, suggestions: &[String]) -> String {
 }
 
 /// Internal version that properly propagates system errors
-fn prompt_input_with_autocomplete_internal(prompt: &str, suggestions: &[String]) -> Result<String, InteractiveError> {
+fn prompt_input_with_autocomplete_internal(
+    prompt: &str,
+    suggestions: &[String],
+) -> Result<String, InteractiveError> {
     print!("{}", prompt);
-    io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
+    io::stdout()
+        .flush()
+        .map_err(|e| AppError::Io(e.to_string()))?;
 
     let guard = RawModeGuard::new()?;
     let mut input = String::new();
     let mut current_suggestion = String::new();
 
     loop {
-        let event = event::read().map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?; // Propagate terminal errors properly
+        let event = event::read()
+            .map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?; // Propagate terminal errors properly
         match event {
-            Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::Char(c),
+                ..
+            }) => {
                 input.push(c);
                 current_suggestion = find_autocomplete_suggestion(&input, suggestions);
 
                 // Redraw current line with suggestion if any
-                guard.print_line(prompt, &input,
-                    if current_suggestion.is_empty() { None } else { Some(&current_suggestion) }
+                guard.print_line(
+                    prompt,
+                    &input,
+                    if current_suggestion.is_empty() {
+                        None
+                    } else {
+                        Some(&current_suggestion)
+                    },
                 )?;
 
                 // Move cursor back to end of actual input
                 guard.move_cursor_left(current_suggestion.len() as u16)?;
             }
-            Event::Key(KeyEvent { code: KeyCode::Tab, .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::Tab, ..
+            }) => {
                 // Accept current suggestion
                 if !current_suggestion.is_empty() {
                     input.push_str(&current_suggestion);
@@ -221,26 +256,40 @@ fn prompt_input_with_autocomplete_internal(prompt: &str, suggestions: &[String])
                     guard.print_line(prompt, &input, None)?;
                 }
             }
-            Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::Backspace,
+                ..
+            }) => {
                 if !input.is_empty() {
                     input.pop();
                     current_suggestion = find_autocomplete_suggestion(&input, suggestions);
 
                     // Redraw current line
-                    guard.print_line(prompt, &input,
-                        if current_suggestion.is_empty() { None } else { Some(&current_suggestion) }
+                    guard.print_line(
+                        prompt,
+                        &input,
+                        if current_suggestion.is_empty() {
+                            None
+                        } else {
+                            Some(&current_suggestion)
+                        },
                     )?;
 
                     // Move cursor back to end of actual input
                     guard.move_cursor_left(current_suggestion.len() as u16)?;
                 }
             }
-            Event::Key(KeyEvent { code: KeyCode::Enter, .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::Enter,
+                ..
+            }) => {
                 // Just move to next line without clearing current content
                 guard.print_and_flush("\r\n")?;
                 break;
             }
-            Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::Esc, ..
+            }) => {
                 return Err(InteractiveError::Cancelled);
             }
             _ => {}
@@ -265,12 +314,18 @@ fn prompt_multiline_internal(prompt: &str) -> Result<String, InteractiveError> {
     let mut current_line = String::new();
 
     loop {
-        let event = event::read().map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?; // Propagate terminal errors properly
+        let event = event::read()
+            .map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?; // Propagate terminal errors properly
         match event {
             Event::Key(KeyEvent {
-                code: KeyCode::Char('j'), modifiers: event::KeyModifiers::CONTROL, ..
-            }) | Event::Key(KeyEvent {
-                code: KeyCode::Enter, modifiers: event::KeyModifiers::SHIFT, ..
+                code: KeyCode::Char('j'),
+                modifiers: event::KeyModifiers::CONTROL,
+                ..
+            })
+            | Event::Key(KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: event::KeyModifiers::SHIFT,
+                ..
             }) => {
                 lines.push(current_line.clone());
                 current_line.clear();
@@ -284,26 +339,51 @@ fn prompt_multiline_internal(prompt: &str) -> Result<String, InteractiveError> {
                 lines.push(current_line.clone());
                 break;
             }
-            Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::Char(c),
+                ..
+            }) => {
                 current_line.push(c);
                 guard.print_and_flush(&c.to_string())?;
             }
-            Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::Backspace,
+                ..
+            }) => {
                 if !current_line.is_empty() {
                     current_line.pop();
-                    execute!(io::stdout(), cursor::MoveLeft(1), terminal::Clear(ClearType::UntilNewLine)).map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?;
-                    io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
+                    execute!(
+                        io::stdout(),
+                        cursor::MoveLeft(1),
+                        terminal::Clear(ClearType::UntilNewLine)
+                    )
+                    .map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?;
+                    io::stdout()
+                        .flush()
+                        .map_err(|e| AppError::Io(e.to_string()))?;
                 } else if !lines.is_empty() {
                     current_line = lines.pop().unwrap();
-                    execute!(io::stdout(), cursor::MoveUp(1), cursor::MoveToColumn(1), terminal::Clear(ClearType::UntilNewLine)).map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?;
+                    execute!(
+                        io::stdout(),
+                        cursor::MoveUp(1),
+                        cursor::MoveToColumn(1),
+                        terminal::Clear(ClearType::UntilNewLine)
+                    )
+                    .map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?;
                     print!("{}", current_line);
                     for _ in 0..current_line.len() {
-                        execute!(io::stdout(), cursor::MoveLeft(1)).map_err(|e| InteractiveError::SystemError(AppError::Io(e.to_string())))?;
+                        execute!(io::stdout(), cursor::MoveLeft(1)).map_err(|e| {
+                            InteractiveError::SystemError(AppError::Io(e.to_string()))
+                        })?;
                     }
-                    io::stdout().flush().map_err(|e| AppError::Io(e.to_string()))?;
+                    io::stdout()
+                        .flush()
+                        .map_err(|e| AppError::Io(e.to_string()))?;
                 }
             }
-            Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => {
+            Event::Key(KeyEvent {
+                code: KeyCode::Esc, ..
+            }) => {
                 return Err(InteractiveError::Cancelled);
             }
             Event::Paste(pasted_text) => {
@@ -347,12 +427,10 @@ pub fn prompt_yes_no(prompt: &str) -> AppResult<bool> {
     }
 }
 
-
-
 pub fn open_editor_custom(
     content: Option<&str>,
     line: Option<u32>,
-    editor_cmd: Option<&str>
+    editor_cmd: Option<&str>,
 ) -> AppResult<String> {
     let editor = detect_editor(editor_cmd);
 
@@ -379,14 +457,18 @@ pub fn open_editor_custom(
                 cmd.arg("--goto");
                 cmd.arg(format!("{}:{}", temp_file.display(), line_num));
                 // For VS Code, we don't need to add the file separately
-                let status = cmd.status()
+                let status = cmd
+                    .status()
                     .map_err(|e| AppError::System(format!("Failed to execute editor: {}", e)))?;
 
                 if !status.success() {
-                    return Err(AppError::System("Editor exited with non-zero status".to_string()));
+                    return Err(AppError::System(
+                        "Editor exited with non-zero status".to_string(),
+                    ));
                 }
 
-                let content = std::fs::read_to_string(&temp_file).map_err(|e| AppError::Io(e.to_string()))?;
+                let content =
+                    std::fs::read_to_string(&temp_file).map_err(|e| AppError::Io(e.to_string()))?;
                 std::fs::remove_file(&temp_file).map_err(|e| AppError::Io(e.to_string()))?;
                 return Ok(content.trim().to_string());
             }
@@ -399,11 +481,14 @@ pub fn open_editor_custom(
 
     cmd.arg(&temp_file);
 
-    let status = cmd.status()
+    let status = cmd
+        .status()
         .map_err(|e| AppError::System(format!("Failed to execute editor: {}: {}", editor, e)))?;
 
     if !status.success() {
-        return Err(AppError::System("Editor exited with non-zero status".to_string()));
+        return Err(AppError::System(
+            "Editor exited with non-zero status".to_string(),
+        ));
     }
 
     let content = std::fs::read_to_string(&temp_file).map_err(|e| AppError::Io(e.to_string()))?;
@@ -416,7 +501,7 @@ pub fn open_editor_custom(
 pub fn edit_file_direct(
     file_path: &std::path::Path,
     line: Option<u32>,
-    editor_cmd: Option<&str>
+    editor_cmd: Option<&str>,
 ) -> AppResult<()> {
     let editor = detect_editor(editor_cmd);
 
@@ -435,11 +520,14 @@ pub fn edit_file_direct(
                 cmd.arg("--goto");
                 cmd.arg(format!("{}:{}", file_path.display(), line_num));
                 // For VS Code, this is sufficient
-                let status = cmd.status()
+                let status = cmd
+                    .status()
                     .map_err(|e| AppError::System(format!("Failed to execute editor: {}", e)))?;
 
                 if !status.success() {
-                    return Err(AppError::System("Editor exited with non-zero status".to_string()));
+                    return Err(AppError::System(
+                        "Editor exited with non-zero status".to_string(),
+                    ));
                 }
                 return Ok(());
             }
@@ -451,16 +539,18 @@ pub fn edit_file_direct(
 
     cmd.arg(file_path);
 
-    let status = cmd.status()
+    let status = cmd
+        .status()
         .map_err(|e| AppError::System(format!("Failed to execute editor: {}: {}", editor, e)))?;
 
     if !status.success() {
-        return Err(AppError::System("Editor exited with non-zero status".to_string()));
+        return Err(AppError::System(
+            "Editor exited with non-zero status".to_string(),
+        ));
     }
 
     Ok(())
 }
-
 
 #[derive(Debug, Clone, Copy)]
 pub enum DisplayServer {
@@ -492,10 +582,7 @@ fn detect_display_server() -> DisplayServer {
 
 /// Check if a command is available in the system
 fn command_exists(cmd: &str) -> bool {
-    Command::new(cmd)
-        .arg("--version")
-        .output()
-        .is_ok()
+    Command::new(cmd).arg("--version").output().is_ok()
 }
 
 pub fn copy_to_clipboard(text: &str) -> AppResult<()> {
@@ -509,11 +596,13 @@ pub fn copy_to_clipboard(text: &str) -> AppResult<()> {
             .map_err(|e| AppError::System(format!("Failed to spawn pbcopy: {}", e)))?;
 
         if let Some(stdin) = child.stdin.as_mut() {
-            stdin.write_all(text.as_bytes())
+            stdin
+                .write_all(text.as_bytes())
                 .map_err(|e| AppError::System(format!("Failed to write to pbcopy: {}", e)))?;
         }
 
-        let status = child.wait()
+        let status = child
+            .wait()
             .map_err(|e| AppError::System(format!("Failed to wait for pbcopy: {}", e)))?;
 
         if !status.success() {
@@ -565,15 +654,24 @@ pub fn copy_to_clipboard(text: &str) -> AppResult<()> {
                     .spawn()
                 {
                     if let Some(stdin) = child.stdin.as_mut()
-                        && let Err(e) = stdin.write_all(text.as_bytes()) {
-                            last_error = Some(AppError::System(format!("Failed to write to {}: {}", tool, e)));
-                            continue;
-                        }
+                        && let Err(e) = stdin.write_all(text.as_bytes())
+                    {
+                        last_error = Some(AppError::System(format!(
+                            "Failed to write to {}: {}",
+                            tool, e
+                        )));
+                        continue;
+                    }
 
                     match child.wait() {
                         Ok(status) if status.success() => return Ok(()),
                         Ok(_) => last_error = Some(AppError::System(format!("{} failed", tool))),
-                        Err(e) => last_error = Some(AppError::System(format!("Failed to wait for {}: {}", tool, e))),
+                        Err(e) => {
+                            last_error = Some(AppError::System(format!(
+                                "Failed to wait for {}: {}",
+                                tool, e
+                            )))
+                        }
                     }
                 } else {
                     last_error = Some(AppError::System(format!("Failed to spawn {}", tool)));
@@ -605,7 +703,9 @@ pub fn copy_to_clipboard(text: &str) -> AppResult<()> {
         if let Some(error) = last_error {
             return Err(error);
         }
-        return Err(AppError::System("All available clipboard tools failed".to_string()));
+        return Err(AppError::System(
+            "All available clipboard tools failed".to_string(),
+        ));
     }
 
     #[cfg(target_os = "windows")]
@@ -616,11 +716,13 @@ pub fn copy_to_clipboard(text: &str) -> AppResult<()> {
             .map_err(|e| AppError::System(format!("Failed to spawn clip: {}", e)))?;
 
         if let Some(stdin) = child.stdin.as_mut() {
-            stdin.write_all(text.as_bytes())
+            stdin
+                .write_all(text.as_bytes())
                 .map_err(|e| AppError::System(format!("Failed to write to clip: {}", e)))?;
         }
 
-        let status = child.wait()
+        let status = child
+            .wait()
             .map_err(|e| AppError::System(format!("Failed to wait for clip: {}", e)))?;
 
         if !status.success() {
@@ -657,7 +759,7 @@ pub fn parse_command_variables(command: &str) -> Vec<(String, Option<String>)> {
 /// Replace variables in command with provided values
 pub fn replace_command_variables(
     command: &str,
-    variables: &std::collections::HashMap<String, String>
+    variables: &std::collections::HashMap<String, String>,
 ) -> String {
     use regex::Regex;
 
@@ -674,12 +776,13 @@ pub fn replace_command_variables(
         } else {
             String::new()
         }
-    }).to_string()
+    })
+    .to_string()
 }
 
 /// Prompt user for variable values interactively
 pub fn prompt_for_variables(
-    variables: Vec<(String, Option<String>)>
+    variables: Vec<(String, Option<String>)>,
 ) -> AppResult<std::collections::HashMap<String, String>> {
     let mut result = std::collections::HashMap::new();
 

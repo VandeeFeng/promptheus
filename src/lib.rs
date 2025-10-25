@@ -4,19 +4,18 @@
 //! including storage, searching, display, and interaction capabilities.
 
 pub mod cli;
-pub mod manager;
 pub mod config;
 pub mod core;
+pub mod manager;
 pub mod sync;
 pub mod utils;
 
 // Re-export core types and traits for easier use
 pub use core::{
-    traits::{PromptStorage, PromptSearch, PromptDisplay, PromptInteraction},
     data::{Prompt, PromptCollection, PromptStats},
     operations::PromptOperations,
+    traits::{PromptDisplay, PromptInteraction, PromptSearch, PromptStorage},
 };
-
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -1,19 +1,16 @@
 // Query operations - List, Search, Execute
 // Consolidated from list.rs, search.rs, exec.rs
 
-use crate::cli::{ListArgs, ListFormat, SearchArgs, ExecArgs};
+use crate::cli::{ExecArgs, ListArgs, ListFormat, SearchArgs};
 use crate::config::Config;
-use crate::core::traits::{PromptSearch, PromptInteraction, PromptDisplay};
 use crate::core::operations::PromptOperations;
+use crate::core::traits::{PromptDisplay, PromptInteraction, PromptSearch};
 use crate::utils;
-use crate::utils::{copy_to_clipboard, print_success, OutputStyle};
-use crate::utils::error::{handle_flow, FlowResult, AppResult};
+use crate::utils::error::{AppResult, FlowResult, handle_flow};
+use crate::utils::{OutputStyle, copy_to_clipboard, print_success};
 
 // List operations
-pub fn handle_list_command(
-    config: Config,
-    args: &ListArgs,
-) -> AppResult<()> {
+pub fn handle_list_command(config: Config, args: &ListArgs) -> AppResult<()> {
     let manager = PromptOperations::new(&config);
 
     // Handle tags listing
@@ -30,7 +27,11 @@ pub fn handle_list_command(
         return manager.print_stats(&manager.get_prompt_stats()?);
     }
 
-    let search_results = manager.search_and_format_for_selection(None, args.tag.as_deref(), args.category.as_deref())?;
+    let search_results = manager.search_and_format_for_selection(
+        None,
+        args.tag.as_deref(),
+        args.category.as_deref(),
+    )?;
 
     if search_results.is_empty() {
         handle_flow(FlowResult::EmptyList {
@@ -48,10 +49,7 @@ pub fn handle_list_command(
 }
 
 // Search operations
-pub fn handle_search_command(
-    config: Config,
-    args: &SearchArgs,
-) -> AppResult<()> {
+pub fn handle_search_command(config: Config, args: &SearchArgs) -> AppResult<()> {
     let manager = PromptOperations::new(&config);
 
     let search_results = manager.search_and_format_for_selection(
@@ -73,9 +71,11 @@ pub fn handle_search_command(
     let selected_prompt = if let Some(selected_line) = utils::interactive_search_with_external_tool(
         &display_strings,
         &manager.config().general.select_cmd,
-        args.query.as_deref()
+        args.query.as_deref(),
     )? {
-        manager.find_prompt_by_display_line(&prompts, &selected_line).map(|index| &prompts[index])
+        manager
+            .find_prompt_by_display_line(&prompts, &selected_line)
+            .map(|index| &prompts[index])
     } else {
         handle_flow(FlowResult::Cancelled("Search cancelled".to_string()));
         return Ok(());
@@ -92,10 +92,7 @@ pub fn handle_search_command(
 }
 
 // Execute operations
-pub fn handle_exec_command(
-    config: Config,
-    args: &ExecArgs,
-) -> AppResult<()> {
+pub fn handle_exec_command(config: Config, args: &ExecArgs) -> AppResult<()> {
     match &args.identifier {
         Some(identifier) => {
             // Direct execution with ID or description
@@ -140,11 +137,15 @@ fn handle_interactive_exec(config: Config, _args: &ExecArgs) -> AppResult<()> {
     let selected_prompt = if let Some(selected_line) = utils::interactive_search_with_external_tool(
         &display_strings,
         &manager.config().general.select_cmd,
-        None
+        None,
     )? {
-        manager.find_prompt_by_display_line(&prompts, &selected_line).map(|index| &prompts[index])
+        manager
+            .find_prompt_by_display_line(&prompts, &selected_line)
+            .map(|index| &prompts[index])
     } else {
-        handle_flow(FlowResult::Cancelled("Prompt selection cancelled".to_string()));
+        handle_flow(FlowResult::Cancelled(
+            "Prompt selection cancelled".to_string(),
+        ));
         return Ok(());
     };
 
@@ -161,4 +162,3 @@ fn handle_interactive_exec(config: Config, _args: &ExecArgs) -> AppResult<()> {
 
     Ok(())
 }
-

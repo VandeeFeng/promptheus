@@ -1128,7 +1128,7 @@ dependencies = [
 
 [[package]]
 name = "promptheus"
-version = "0.1.141"
+version = "0.1.142"
 dependencies = [
  "async-trait",
  "chrono",

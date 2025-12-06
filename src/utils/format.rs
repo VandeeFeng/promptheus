@@ -96,8 +96,9 @@ pub fn format_category_info(category: &Option<String>) -> (String, bool) {
 
 /// Simple string truncation function
 pub fn truncate_string(text: &str, max_len: usize) -> String {
-    if text.len() > max_len {
-        format!("{}...", &text[..max_len.saturating_sub(3)])
+    if text.chars().count() > max_len {
+        let truncated: String = text.chars().take(max_len.saturating_sub(3)).collect();
+        format!("{}...", truncated)
     } else {
         text.to_string()
     }

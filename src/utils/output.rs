@@ -229,28 +229,21 @@ impl OutputStyle {
     pub fn format_prompt_line(prompt: &Prompt, config: &Config) -> String {
         let display = Self::build_prompt_display(prompt, config);
 
-        let content_display = if config.general.content_preview {
-            display.content_preview
-        } else {
-            String::new()
-        };
-
         let category_display = if let Some(category) = &prompt.category {
             if category.trim().is_empty() {
-                Self::muted("[] ")
+                Self::muted("[]")
             } else {
-                Self::tag(&format!("[{}] ", category))
+                Self::tag(&format!("[{}]", category))
             }
         } else {
-            Self::muted("[] ")
+            Self::muted("[]")
         };
 
         format!(
-            "{}: {}{}{}",
+            "{}: {}{}",
             Self::description(&display.description),
             category_display,
-            display.tags_formatted,
-            Self::content(&content_display)
+            display.tags_formatted
         )
     }
 

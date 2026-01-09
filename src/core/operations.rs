@@ -51,6 +51,18 @@ impl PromptOperations {
         &self.config
     }
 
+    fn render_prompt_content(&self, prompt: &Prompt) -> AppResult<String> {
+        let variables = parse_command_variables(&prompt.content);
+
+        if variables.is_empty() {
+            return Ok(prompt.content.clone());
+        }
+
+        crate::utils::output::OutputStyle::print_variables_list(&variables);
+        let user_values = prompt_for_variables(variables)?;
+        Ok(replace_command_variables(&prompt.content, &user_values))
+    }
+
     /// Load prompts with proper error handling and deterministic ID generation
     fn load_prompts_with_ids(&self) -> AppResult<PromptCollection> {
         self.ensure_storage_exists()?;
@@ -255,33 +267,14 @@ impl PromptInteraction for PromptOperations {
     fn execute_prompt(&self, prompt: &Prompt, copy_to_clipboard: bool) -> AppResult<()> {
         use crate::utils::copy_to_clipboard as copy_fn;
 
-        let variables = parse_command_variables(&prompt.content);
-
-        let rendered_content = if variables.is_empty() {
-            prompt.content.clone()
-        } else {
-            crate::utils::output::OutputStyle::print_variables_list(&variables);
-            let user_values = prompt_for_variables(variables)?;
-            replace_command_variables(&prompt.content, &user_values)
-        };
+        let rendered_content = self.render_prompt_content(prompt)?;
 
         if copy_to_clipboard {
             copy_fn(&rendered_content)?;
             crate::utils::print_success("Prompt copied to clipboard!");
-            // Also show content with pagination after copying
-            crate::utils::output::OutputStyle::ask_and_display_content(
-                &rendered_content,
-                "📄 Content",
-            )?;
-        } else {
-            // Show content with pagination if needed
-            crate::utils::output::OutputStyle::ask_and_display_content(
-                &rendered_content,
-                "📄 Content",
-            )?;
         }
 
-        Ok(())
+        crate::utils::output::OutputStyle::ask_and_display_content(&rendered_content, "📄 Content")
     }
 
     fn select_interactive_prompts(&self, prompts: Vec<Prompt>) -> AppResult<Option<Prompt>> {

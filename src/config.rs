@@ -100,31 +100,31 @@ impl Default for Config {
     }
 }
 
+/// Check if any of the given paths exist
+fn path_exists(paths: &[&str]) -> bool {
+    paths.iter().any(|p| std::path::Path::new(p).exists())
+}
+
 /// Detect the best available selection command
 fn detect_best_select_command() -> String {
     if cfg!(windows) {
-        // On Windows, try to find a suitable selector
-        if std::path::Path::new("C:\\Program Files\\Git\\usr\\bin\\fzf.exe").exists() {
-            return "fzf".to_string();
-        }
-        "powershell".to_string() // Fallback to PowerShell
-    } else {
-        // On Unix-like systems, check for available tools
-        if std::path::Path::new("/usr/bin/fzf").exists()
-            || std::path::Path::new("/usr/local/bin/fzf").exists()
-        {
+        if path_exists(&["C:\\Program Files\\Git\\usr\\bin\\fzf.exe"]) {
             "fzf".to_string()
-        } else if std::path::Path::new("/usr/bin/sk").exists()
-            || std::path::Path::new("/usr/local/bin/sk").exists()
-        {
-            "sk".to_string()
-        } else if std::path::Path::new("/usr/bin/peco").exists()
-            || std::path::Path::new("/usr/local/bin/peco").exists()
-        {
-            "peco".to_string()
         } else {
-            "fzf".to_string() // Default assumption
+            "powershell".to_string()
         }
+    } else {
+        let unix_commands = [
+            (&["/usr/bin/fzf", "/usr/local/bin/fzf"] as &[&str], "fzf"),
+            (&["/usr/bin/sk", "/usr/local/bin/sk"], "sk"),
+            (&["/usr/bin/peco", "/usr/local/bin/peco"], "peco"),
+        ];
+
+        unix_commands
+            .into_iter()
+            .find(|(paths, _)| path_exists(paths))
+            .map(|(_, cmd)| cmd.to_string())
+            .unwrap_or_else(|| "fzf".to_string())
     }
 }
 

@@ -129,61 +129,51 @@ impl PromptCollection {
     pub fn search(&self, query: Option<&str>, tag: Option<&str>, config: &Config) -> Vec<Prompt> {
         let mut prompts = self.prompts.clone();
 
-        // Filter by query
         if let Some(q) = query {
-            let search_query = if config.general.search_case_sensitive {
-                q.to_string()
-            } else {
-                q.to_lowercase()
-            };
-
-            prompts.retain(|p| {
-                let description = if config.general.search_case_sensitive {
-                    p.description.clone()
-                } else {
-                    p.description.to_lowercase()
-                };
-
-                let content = if config.general.search_case_sensitive {
-                    p.content.clone()
-                } else {
-                    p.content.to_lowercase()
-                };
-
-                let tags_match = p.tag.iter().flatten().any(|t| {
-                    let tag_str = if config.general.search_case_sensitive {
-                        t.clone()
-                    } else {
-                        t.to_lowercase()
-                    };
-                    tag_str.contains(&search_query)
-                });
-
-                description.contains(&search_query) || content.contains(&search_query) || tags_match
-            });
+            prompts.retain(|p| self.matches_query(p, q, config));
         }
 
-        // Filter by tag
         if let Some(t) = tag {
             prompts.retain(|p| p.tag.iter().flatten().any(|tag| tag == &t.to_string()));
         }
 
-        // Sort prompts
-        match config.general.sort_by {
-            SortBy::Recency => {
-                prompts.sort_by(|a, b| b.created_at.cmp(&a.created_at));
-            }
-            SortBy::Title => {
-                prompts.sort_by(|a, b| a.description.cmp(&b.description));
-            }
-            SortBy::Description => {
-                prompts.sort_by(|a, b| a.description.cmp(&b.description));
-            }
-            SortBy::Updated => {
-                prompts.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-            }
-        }
+        self.sort_prompts(prompts, config)
+    }
 
+    fn matches_query(&self, prompt: &Prompt, query: &str, config: &Config) -> bool {
+        let search_query = self.normalize_for_search(query, config);
+
+        let description_matches = self
+            .normalize_for_search(&prompt.description, config)
+            .contains(&search_query);
+
+        let content_matches = self
+            .normalize_for_search(&prompt.content, config)
+            .contains(&search_query);
+
+        let tags_match = prompt
+            .tag
+            .iter()
+            .flatten()
+            .any(|t| self.normalize_for_search(t, config).contains(&search_query));
+
+        description_matches || content_matches || tags_match
+    }
+
+    fn normalize_for_search(&self, text: &str, config: &Config) -> String {
+        if config.general.search_case_sensitive {
+            text.to_string()
+        } else {
+            text.to_lowercase()
+        }
+    }
+
+    fn sort_prompts(&self, mut prompts: Vec<Prompt>, config: &Config) -> Vec<Prompt> {
+        prompts.sort_by(|a, b| match config.general.sort_by {
+            SortBy::Recency => b.created_at.cmp(&a.created_at),
+            SortBy::Title | SortBy::Description => a.description.cmp(&b.description),
+            SortBy::Updated => b.updated_at.cmp(&a.updated_at),
+        });
         prompts
     }
 

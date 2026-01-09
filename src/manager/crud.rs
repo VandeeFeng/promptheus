@@ -17,60 +17,67 @@ use crate::utils::{
 pub async fn handle_new_command(config: Config, args: &NewArgs) -> Result<FlowResult, AppError> {
     let storage = PromptOperations::new(&config);
 
-    let description = match &args.description {
-        Some(d) => d.clone(),
-        None => match utils::prompt_input_with_autocomplete(
-            &format!("{}: ", OutputStyle::label("Description")),
-            &[],
-        ) {
-            Some(desc) => desc,
-            None => {
-                return Ok(FlowResult::Cancelled(
-                    "Operation cancelled by user".to_string(),
-                ));
-            }
-        },
-    };
+    let description = prompt_input_default("Description", &args.description, &[], false)?;
 
-    let content = if let Some(content) = &args.content {
-        content.clone()
-    } else if args.editor {
-        utils::open_editor_custom(None, None, Some(&storage.config().general.editor))?
-    } else {
-        match utils::prompt_multiline(&format!("{}:", OutputStyle::label("Prompt content"))) {
-            Some(content) => content,
-            None => {
-                return Ok(FlowResult::Cancelled(
-                    "Operation cancelled by user".to_string(),
-                ));
-            }
-        }
-    };
+    let content = resolve_prompt_content(&storage, args)?;
 
     let mut prompt = Prompt::new(description.clone(), content);
+    add_tags_to_prompt(&storage, &mut prompt, args.tag.as_deref())?;
 
-    // Handle tags interactively if not specified
-    if let Some(tag_str) = &args.tag {
-        let tags: Vec<String> = tag_str.split_whitespace().map(|t| t.to_string()).collect();
-        for tag in tags {
-            prompt.add_tag(tag);
+    // Handle category interactively if not specified
+    if let Some(category) = &args.category {
+        prompt.category = Some(category.clone());
+    } else {
+        let existing_categories = storage.get_categories()?;
+        let custom_category = prompt_input_labeled("Category", &existing_categories)?;
+        if !custom_category.is_empty() {
+            prompt.category = Some(custom_category);
         }
+    }
+
+    storage.add_prompt(prompt)?;
+    utils::output::print_success(&format!("Prompt '{}' saved successfully!", description));
+
+    crate::manager::sync::handle_auto_sync_after_crud(storage.config()).await;
+
+    Ok(FlowResult::Success(
+        "Prompt saved successfully!".to_string(),
+    ))
+}
+
+fn resolve_prompt_content(storage: &PromptOperations, args: &NewArgs) -> Result<String, AppError> {
+    if let Some(content) = &args.content {
+        return Ok(content.clone());
+    }
+
+    if args.editor {
+        return Ok(utils::open_editor_custom(
+            None,
+            None,
+            Some(&storage.config().general.editor),
+        )?);
+    }
+
+    match utils::prompt_multiline(&format!("{}:", OutputStyle::label("Prompt content"))) {
+        Some(content) => Ok(content),
+        None => Err(AppError::System("Operation cancelled by user".to_string())),
+    }
+}
+
+fn add_tags_to_prompt(
+    storage: &PromptOperations,
+    prompt: &mut Prompt,
+    tag_arg: Option<&str>,
+) -> Result<(), AppError> {
+    if let Some(tag_str) = tag_arg {
+        let tags: Vec<String> = tag_str.split_whitespace().map(String::from).collect();
+        tags.into_iter().for_each(|tag| prompt.add_tag(tag));
     } else {
         let existing_tags = storage.get_all_tags()?;
         loop {
-            let custom_tag = match utils::prompt_input_with_autocomplete(
-                &format!("{}: ", OutputStyle::label("Tag")),
-                &existing_tags,
-            ) {
-                Some(tag) => tag,
-                None => {
-                    return Ok(FlowResult::Cancelled(
-                        "Operation cancelled by user".to_string(),
-                    ));
-                } // ESC to cancel
-            };
+            let custom_tag = prompt_input_labeled("Tag", &existing_tags)?;
             if custom_tag.is_empty() {
-                break; // Empty input to finish adding tags
+                break;
             }
             prompt.add_tag(custom_tag);
         }
@@ -81,37 +88,34 @@ pub async fn handle_new_command(config: Config, args: &NewArgs) -> Result<FlowRe
         prompt.add_tag(tag.clone());
     }
 
-    // Handle category interactively if not specified
-    if let Some(category) = &args.category {
-        prompt.category = Some(category.clone());
-    } else {
-        let existing_categories = storage.get_categories()?;
+    Ok(())
+}
 
-        let custom_category = match utils::prompt_input_with_autocomplete(
-            &format!("{}: ", OutputStyle::label("Category")),
-            &existing_categories,
-        ) {
-            Some(category) => category,
-            None => {
-                return Ok(FlowResult::Cancelled(
-                    "Operation cancelled by user".to_string(),
-                ));
-            }
-        };
-        if !custom_category.is_empty() {
-            prompt.category = Some(custom_category);
-        }
+fn prompt_input_default(
+    label: &str,
+    provided_value: &Option<String>,
+    completions: &[String],
+    multiline: bool,
+) -> Result<String, AppError> {
+    if let Some(value) = provided_value {
+        return Ok(value.clone());
     }
 
-    storage.add_prompt(prompt)?;
-    utils::output::print_success(&format!("Prompt '{}' saved successfully!", description));
+    let result = if multiline {
+        utils::prompt_multiline(&format!("{}:", OutputStyle::label(label)))
+    } else {
+        utils::prompt_input_with_autocomplete(
+            &format!("{}: ", OutputStyle::label(label)),
+            completions,
+        )
+    };
 
-    // Auto-sync if enabled
-    crate::manager::sync::handle_auto_sync_after_crud(storage.config()).await;
+    result.ok_or_else(|| AppError::System("Operation cancelled by user".to_string()))
+}
 
-    Ok(FlowResult::Success(
-        "Prompt saved successfully!".to_string(),
-    ))
+fn prompt_input_labeled(label: &str, completions: &[String]) -> Result<String, AppError> {
+    utils::prompt_input_with_autocomplete(&format!("{}: ", OutputStyle::label(label)), completions)
+        .ok_or_else(|| AppError::System("Operation cancelled by user".to_string()))
 }
 
 // Read operations
@@ -136,59 +140,78 @@ pub async fn handle_edit_command(config: Config, args: &EditArgs) -> Result<Flow
     let storage = PromptOperations::new(&config);
     let prompts = storage.search_prompts(None, args.tag.as_deref())?;
 
-    let file_to_edit = storage.config().general.prompt_file.clone();
-    let line_number = if let Some(identifier) = args.identifier.as_ref().or(args.id.as_ref()) {
-        // Find by identifier
-        if let Some(prompt) = prompts.iter().find(|p| {
-            p.id.as_ref() == Some(identifier)
-                || p.description
-                    .to_lowercase()
-                    .contains(&identifier.to_lowercase())
-        }) {
-            match find_line_number_of_prompt(&file_to_edit, &prompt.description) {
-                Ok(line_num) => Some(line_num),
-                Err(_) => {
-                    return Ok(FlowResult::NotFound {
-                        item_type: "Prompt in TOML file".to_string(),
-                        search_term: prompt.description.clone(),
-                    });
-                }
-            }
-        } else {
-            None
+    let prompt = match resolve_prompt_to_edit(&storage, args, prompts) {
+        Ok(p) => p,
+        Err(FlowResult::NotFound {
+            item_type,
+            search_term,
+        }) => {
+            return Ok(FlowResult::NotFound {
+                item_type,
+                search_term,
+            });
         }
-    } else {
-        // Interactive selection
-        if let Some(selected_prompt) = storage.select_interactive_prompts(prompts)? {
-            match find_line_number_of_prompt(&file_to_edit, &selected_prompt.description) {
-                Ok(line_num) => Some(line_num),
-                Err(_) => {
-                    return Ok(FlowResult::NotFound {
-                        item_type: "Prompt in TOML file".to_string(),
-                        search_term: selected_prompt.description.clone(),
-                    });
-                }
-            }
-        } else {
-            return Ok(FlowResult::Cancelled(
-                "Operation cancelled by user".to_string(),
-            ));
+        Err(FlowResult::Cancelled(msg)) => {
+            return Ok(FlowResult::Cancelled(msg));
+        }
+        Err(FlowResult::Success(_) | FlowResult::EmptyList { .. }) => {
+            return Err(AppError::System("Unexpected flow result".to_string()));
         }
     };
 
+    let line_number =
+        match find_prompt_line_number(&storage.config().general.prompt_file, &prompt.description) {
+            Ok(num) => num,
+            Err(_) => {
+                return Ok(FlowResult::NotFound {
+                    item_type: "Prompt in TOML file".to_string(),
+                    search_term: prompt.description.clone(),
+                });
+            }
+        };
+
     utils::edit_file_direct(
-        &file_to_edit,
-        line_number.map(|l| l as u32),
+        &storage.config().general.prompt_file,
+        Some(line_number as u32),
         args.editor.as_deref(),
     )?;
 
-    // Auto-sync if enabled
     crate::manager::sync::handle_auto_sync_after_crud(storage.config()).await;
 
     Ok(FlowResult::Success("".to_string()))
 }
 
-fn find_line_number_of_prompt(
+fn resolve_prompt_to_edit(
+    storage: &PromptOperations,
+    args: &EditArgs,
+    prompts: Vec<Prompt>,
+) -> Result<Prompt, FlowResult> {
+    if let Some(identifier) = args.identifier.as_ref().or(args.id.as_ref()) {
+        prompts
+            .iter()
+            .find(|p| {
+                p.id.as_ref() == Some(identifier)
+                    || p.description
+                        .to_lowercase()
+                        .contains(&identifier.to_lowercase())
+            })
+            .cloned()
+            .ok_or_else(|| FlowResult::NotFound {
+                item_type: "Prompt".to_string(),
+                search_term: identifier.clone(),
+            })
+    } else {
+        storage
+            .select_interactive_prompts(prompts)
+            .map_err(|e| match e {
+                AppError::System(msg) => FlowResult::Cancelled(msg),
+                _ => FlowResult::Cancelled("Failed to select prompt".to_string()),
+            })?
+            .ok_or_else(|| FlowResult::Cancelled("Operation cancelled by user".to_string()))
+    }
+}
+
+fn find_prompt_line_number(
     file_path: &std::path::Path,
     prompt_description: &str,
 ) -> Result<usize, AppError> {
@@ -216,39 +239,46 @@ fn find_line_number_of_prompt(
 // Delete operations
 pub fn handle_delete_command(config: Config, args: &DeleteArgs) -> Result<FlowResult, AppError> {
     let manager = PromptOperations::new(&config);
-
-    // Find prompt by ID or description
-    let prompt = if let Some(found) = manager.find_prompt(&args.identifier)? {
-        found
-    } else {
-        // If not found, try interactive selection
-        let prompts = manager.get_all_prompts_or_return_empty()?;
-
-        // Use interactive selection
-        if let Some(selected_prompt) = manager.select_interactive_prompts(prompts)? {
-            selected_prompt
-        } else {
-            return Ok(FlowResult::Cancelled(
-                "Prompt selection cancelled".to_string(),
-            ));
-        }
-    };
+    let prompt = resolve_prompt_to_delete(&manager, &args.identifier)?;
 
     println!("Prompt to delete:");
     OutputStyle::print_prompt_basic(&prompt);
 
-    if !args.force && !utils::prompt_yes_no("\nAre you sure you want to delete this prompt?")? {
-        return Ok(FlowResult::Cancelled("Prompt not deleted".to_string()));
-    }
-
-    if let Some(id) = &prompt.id {
-        manager.delete_prompt(id)?;
-    } else {
-        return Err(AppError::System(
-            "Cannot delete prompt: missing ID".to_string(),
-        ));
-    }
-    println!("✓ Prompt '{}' deleted successfully!", prompt.description);
+    confirm_delete(&manager, &prompt, args.force)?;
 
     Ok(FlowResult::Success("".to_string()))
+}
+
+fn resolve_prompt_to_delete(
+    manager: &PromptOperations,
+    identifier: &str,
+) -> Result<Prompt, AppError> {
+    if let Some(found) = manager.find_prompt(identifier)? {
+        return Ok(found);
+    }
+
+    let prompts = manager.get_all_prompts_or_return_empty()?;
+    manager
+        .select_interactive_prompts(prompts)?
+        .ok_or_else(|| AppError::System("Prompt selection cancelled".to_string()))
+}
+
+fn confirm_delete(
+    manager: &PromptOperations,
+    prompt: &Prompt,
+    force: bool,
+) -> Result<(), AppError> {
+    if !force && !utils::prompt_yes_no("\nAre you sure you want to delete this prompt?")? {
+        return Err(AppError::System("Prompt not deleted".to_string()));
+    }
+
+    let id = prompt
+        .id
+        .as_ref()
+        .ok_or_else(|| AppError::System("Cannot delete prompt: missing ID".to_string()))?;
+
+    manager.delete_prompt(id)?;
+    println!("✓ Prompt '{}' deleted successfully!", prompt.description);
+
+    Ok(())
 }
